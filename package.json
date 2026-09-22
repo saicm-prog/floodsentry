@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "node server/index.mjs",
+    "dev:all": "npm-run-all --parallel dev dev:api",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -14,7 +16,8 @@
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "npm-run-all": "latest"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

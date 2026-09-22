@@ -1,4 +1,4 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode, useState, type FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowDown, ArrowUpRight, CloudLightning, Menu, Snowflake, Wind, X } from 'lucide-react'
 import './styles.css'
@@ -24,11 +24,35 @@ function Card({ storm }: { storm: Storm }) {
   return <article className="storm-card" id={storm.id}><div className="storm-image"><img src={storm.image} alt={`${storm.title} weather scene`} loading="lazy" /><span className="storm-icon"><Icon size={21} /></span></div><div className="storm-copy"><p className="eyebrow">Storm type / field guide</p><h3>{storm.title}</h3><p className="lead">{storm.summary}</p><p>{storm.detail}</p><a className="text-link" href="https://www.weather.gov/safety" target="_blank" rel="noreferrer">Safety guidance <ArrowUpRight size={16} /></a></div></article>
 }
 
+function SubscribePanel() {
+  const [status, setStatus] = useState('')
+  const [email, setEmail] = useState('')
+  const [zipCode, setZipCode] = useState('')
+  const [consent, setConsent] = useState(false)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setStatus('Saving locally…')
+    try {
+      const response = await fetch('/api/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, zipCode, consent }) })
+      const result = await response.json(); setStatus(result.message || result.error)
+      if (response.ok) { setEmail(''); setZipCode(''); setConsent(false) }
+    } catch { setStatus('Start the local API with npm run dev:api first.') }
+  }
+  return <div className="subscribe-panel"><p className="eyebrow">Local preview / email alerts</p><h2>Stay ahead<br /><em>of the weather.</em></h2><p>Subscribe by ZIP code for local test alerts. This phase stores everything on your computer and does not send real email.</p><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" required /></label><label>U.S. ZIP code<input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="00000" required /></label><label className="consent"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} required /> I agree to receive local test alerts.</label><button className="button" type="submit">Subscribe locally <ArrowUpRight size={17} /></button></form>{status && <p className="form-status" role="status">{status}</p>}</div>
+}
+
+function TestAlertPanel() {
+  const [zipCode, setZipCode] = useState('')
+  const [status, setStatus] = useState('')
+  const sendTest = async (event: FormEvent) => { event.preventDefault(); const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zipCode, triggerType: 'dummy_damage_risk' }) }); const result = await response.json(); setStatus(result.message || result.error) }
+  return <div className="test-panel"><p className="eyebrow">Developer simulator</p><h3>Trigger a local event</h3><p>Use this to test the future alert pipeline without an outside provider.</p><form onSubmit={sendTest}><input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="ZIP code" required /><button className="button dark" type="submit">Run test</button></form>{status && <p className="form-status" role="status">{status}</p>}</div>
+}
+
 function App() {
   return <div id="top"><Header /><main>
     <section className="hero"><div><p className="eyebrow"><span className="pulse" /> A field guide to severe weather</p><h1>When the sky<br />gets <em>serious.</em></h1><p className="hero-text">Flood Sentry is a clear, visual introduction to the forces that shape our atmosphere—and how to stay ready when they arrive.</p><a className="button" href="#atlas">Explore the guide <ArrowDown size={17} /></a></div><div className="hero-orbit" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbital-sun" /></div></section>
     <section className="intro section"><div><p className="eyebrow">The big picture</p><h2>Every storm<br />has a <em>story.</em></h2></div><p>Storms are disturbances in the atmosphere, ranging from a brief thunderstorm to a sprawling tropical cyclone. Their shapes, ingredients, and hazards are different—but understanding the basics helps us make better decisions.</p></section>
     <section className="atlas section" id="atlas"><div className="section-heading"><div><p className="eyebrow">The guide / 04 entries</p><h2>Meet the <em>forces.</em></h2></div><p>Explore four of Earth’s most powerful weather systems.</p></div><div className="storm-grid">{storms.map(storm => <Card key={storm.id} storm={storm} />)}</div></section>
+    <section className="subscribe section" id="subscribe"><SubscribePanel /><TestAlertPanel /></section>
     <section className="safety section" id="safety"><div><h2>Watch means<br /><em>be ready.</em></h2><p className="safety-text">Warning means take action. Have more than one way to receive alerts, know where you will shelter, and follow instructions from your local emergency managers.</p><a className="button dark" href="https://www.weather.gov/safety" target="_blank" rel="noreferrer">NWS safety hub <ArrowUpRight size={17} /></a></div><div className="safety-steps"><div><strong>01</strong><span>Get inside</span><p>Put walls between you and the weather.</p></div><div><strong>02</strong><span>Get informed</span><p>Use NOAA Weather Radio or official alerts.</p></div><div><strong>03</strong><span>Stay put</span><p>Wait for the all-clear from officials.</p></div></div></section>
     <section className="sources section" id="sources"><p className="eyebrow">Keep exploring</p><h2>Built from<br /><em>good sources.</em></h2><div className="source-list"><a href="https://www.weather.gov/spotterguide/types" target="_blank" rel="noreferrer"><span>NOAA / National Weather Service</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/hurricane" target="_blank" rel="noreferrer"><span>Hurricane safety & science</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/tornado" target="_blank" rel="noreferrer"><span>Tornado safety & science</span><ArrowUpRight size={16} /></a></div></section>
   </main><footer><Logo /><p>Educational guide · Always follow local official guidance.</p><a href="#top">Back to top ↑</a></footer></div>
