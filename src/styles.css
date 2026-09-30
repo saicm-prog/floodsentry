@@ -17,3 +17,6 @@
 .logo{font-size:22px;gap:12px;letter-spacing:-.05em}
 .logo-mark{width:32px;height:32px;font-size:19px}
 @media(max-width:720px){.logo{font-size:20px}.logo-mark{width:30px;height:30px}}
+
+/* Use one consistent typeface across every site element. */
+*,*::before,*::after{font-family:'DM Sans',sans-serif!important}
