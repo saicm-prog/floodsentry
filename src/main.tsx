@@ -54,6 +54,15 @@ function RegisterPage() {
   return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local preview / email alerts</p><h1>Stay ahead<br /><em>of the weather.</em></h1><p>Register by ZIP code for local alerts. Your registration is stored on this computer, and matching simulated events can send email through the configured Resend account.</p></section><section className="register-card"><SubscribeForm /></section></main><Footer /></>
 }
 
+function ErrorModal({ message, onClose }: { message: string; onClose: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}><section className="error-modal" role="alertdialog" aria-modal="true" aria-labelledby="simulator-error-title" aria-describedby="simulator-error-message"><button className="modal-close" type="button" onClick={onClose} aria-label="Dismiss error"><X size={20} /></button><span className="modal-icon" aria-hidden="true">!</span><p className="eyebrow">Simulator error</p><h2 id="simulator-error-title">The event could not finish cleanly.</h2><p id="simulator-error-message">{message}</p><button className="button" type="button" onClick={onClose}>Dismiss</button></section></div>
+}
+
 function RegistrationsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [status, setStatus] = useState('Loading registrations…')
@@ -74,21 +83,31 @@ function SimulatorPage() {
   const [zipCode, setZipCode] = useState('')
   const [triggerType, setTriggerType] = useState('dummy_damage_risk')
   const [status, setStatus] = useState('')
+  const [error, setError] = useState('')
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   const loadNotifications = async () => {
-    try { const response = await fetch('/api/notifications'); const result = await response.json(); setNotifications(result.notifications || []) } catch { setStatus('Start the local API with npm run dev:api first.') }
+    try {
+      const response = await fetch('/api/notifications')
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not load recent events.')
+      setNotifications(result.notifications || [])
+    } catch { setError('Recent events could not be loaded. Start the local API with npm run dev:api and try again.') }
   }
   useEffect(() => { void loadNotifications() }, [])
   const sendTest = async (event: FormEvent) => {
-    event.preventDefault(); setStatus('Creating local event…')
+    event.preventDefault(); setStatus('Creating local event…'); setError('')
     try {
       const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zipCode, triggerType }) })
-      const result = await response.json(); setStatus(result.message || result.error)
-      if (response.ok) { setZipCode(''); await loadNotifications() }
-    } catch { setStatus('Start the local API with npm run dev:api first.') }
+      const result = await response.json()
+      if (!response.ok) { setStatus(''); setError(result.error || 'The simulator returned an unexpected error.'); return }
+      setStatus(result.message || 'Local event created.')
+      if (result.email?.status === 'not_configured') setError('The event was saved, but no email was sent because Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the project .env file, then restart the API.')
+      if (result.email?.status === 'partial_failure') setError(`The event was saved, but email delivery was incomplete. ${result.email.sent} alert(s) sent and ${result.email.failed} failed.`)
+      setZipCode(''); await loadNotifications()
+    } catch { setStatus(''); setError('The simulator could not reach the local API. Start it with npm run dev:api and try again.') }
   }
-  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Trigger a local<br /><em>storm event.</em></h1><p>Create a local alert record for a ZIP code and see how many registered subscribers match. When Resend is configured, those subscribers receive the alert by email.</p></section><section className="simulator-grid"><div className="simulator-card"><form onSubmit={sendTest}><label>U.S. ZIP code<input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="00000" required /></label><label>Event type<select value={triggerType} onChange={event => setTriggerType(event.target.value)}>{eventTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label><button className="button" type="submit">Run local event <ArrowUpRight size={17} /></button>{status && <p className="form-status" role="status">{status}</p>}</form></div><div className="notifications-card"><p className="eyebrow">Recent local events</p>{notifications.length === 0 ? <p className="empty-state">No simulated events yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p>{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}</div></section></main><Footer /></>
+  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Trigger a local<br /><em>storm event.</em></h1><p>Create a local alert record for a ZIP code and see how many registered subscribers match. When Resend is configured, those subscribers receive the alert by email.</p></section><section className="simulator-grid"><div className="simulator-card"><form onSubmit={sendTest}><label>U.S. ZIP code<input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="00000" required /></label><label>Event type<select value={triggerType} onChange={event => setTriggerType(event.target.value)}>{eventTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label><button className="button" type="submit">Run local event <ArrowUpRight size={17} /></button>{status && <p className="form-status success-status" role="status">{status}</p>}</form></div><div className="notifications-card"><p className="eyebrow">Recent local events</p>{notifications.length === 0 ? <p className="empty-state">No simulated events yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p>{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}</div></section></main><Footer />{error && <ErrorModal message={error} onClose={() => setError('')} />}</>
 }
 
 function HomePage() {
