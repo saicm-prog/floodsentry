@@ -13,3 +13,7 @@
 
 /* Flood Sentry palette: brighter water, coral, and sun accents. */
 :root{background:#102b46;color:#f7fbff}.hero,.intro,.atlas,.sources{background:#102b46}.header,.logo{color:#f7fbff}.nav a{color:#d7e9f5}.hero-text,.intro>p,.section-heading>p{color:#b9d1df}.button{background:#ff735c;color:#102b46}.ticker{background:#0b2035;border-color:#315777;color:#ffd166}.storm-card{background:#183f60}.storm-icon{background:#ffd166}.storm-copy h3{color:#f7fbff}.storm-copy p:not(.eyebrow):not(.lead){color:#c5dbe7}.text-link{color:#ffd166}.safety{background:#ff735c}.sources .source-list a{border-color:#315777;color:#d7e9f5}.orbit{border-color:#47799d}.orbital-sun{background:#ffd166}.orbit-label{color:#b9d1df}footer{border-color:#315777;color:#b9d1df}footer .logo{color:#f7fbff}
+/* Emphasize the Flood Sentry wordmark in the site header. */
+.logo{font-size:22px;gap:12px;letter-spacing:-.05em}
+.logo-mark{width:32px;height:32px;font-size:19px}
+@media(max-width:720px){.logo{font-size:20px}.logo-mark{width:30px;height:30px}}
