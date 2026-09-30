@@ -53,6 +53,7 @@ const server = createServer(async (request, response) => {
       db.prepare('INSERT INTO subscriptions (email, zip_code, consented_at, created_at) VALUES (?, ?, ?, ?)').run(email.trim().toLowerCase(), zipCode, now, now)
       return json(response, 201, { message: 'You are subscribed for local test alerts.' })
     }
+    if (request.method === 'GET' && request.url === '/api/subscriptions') return json(response, 200, { subscriptions: db.prepare('SELECT id, email, zip_code, consented_at, created_at FROM subscriptions ORDER BY id DESC').all() })
     if (request.method === 'POST' && request.url === '/api/test-alert') {
       const { zipCode, triggerType = 'dummy_damage_risk' } = await readBody(request)
       if (!/^\d{5}$/.test(zipCode || '')) return json(response, 400, { error: 'Enter a valid five-digit ZIP code.' })

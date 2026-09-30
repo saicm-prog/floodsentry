@@ -5,6 +5,7 @@ import './styles.css'
 
 type Storm = { id: string; title: string; summary: string; detail: string; image: string; icon: typeof Wind }
 type Notification = { id: number; zip_code: string; trigger_type: string; message: string; created_at: string }
+type Registration = { id: number; email: string; zip_code: string; consented_at: string; created_at: string }
 
 const storms: Storm[] = [
   { id: 'thunderstorms', title: 'Thunderstorms', summary: 'The atmosphere puts on a light show.', detail: 'A thunderstorm is a local storm produced by a cumulonimbus cloud and accompanied by lightning and thunder. Severe thunderstorms can produce hail at least 1 inch in diameter or wind gusts of 58 mph or higher.', image: 'https://images.unsplash.com/photo-1605727216801-e27ce1d0cc28?auto=format&fit=crop&w=1400&q=85', icon: CloudLightning },
@@ -25,7 +26,7 @@ function Logo() { return <a className="logo" href="/" aria-label="Flood Sentry h
 function Header() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={close}>Home</a><a href="/#atlas" onClick={close}>Explore storms</a><a href="/register" onClick={close}>Register</a><a href="/simulate" onClick={close}>Simulate event</a><a href="/#safety" onClick={close}>Safety basics</a><a href="/#sources" onClick={close}>Sources</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
+  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={close}>Home</a><a href="/#atlas" onClick={close}>Explore storms</a><a href="/register" onClick={close}>Register</a><a href="/registrations" onClick={close}>Registrations</a><a href="/simulate" onClick={close}>Simulate event</a><a href="/#safety" onClick={close}>Safety basics</a><a href="/#sources" onClick={close}>Sources</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
 }
 
 function Card({ storm }: { storm: Storm }) {
@@ -51,6 +52,22 @@ function SubscribeForm() {
 
 function RegisterPage() {
   return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local preview / email alerts</p><h1>Stay ahead<br /><em>of the weather.</em></h1><p>Register by ZIP code for local test alerts. This phase stores everything on your computer and does not send real email.</p></section><section className="register-card"><SubscribeForm /></section></main><Footer /></>
+}
+
+function RegistrationsPage() {
+  const [registrations, setRegistrations] = useState<Registration[]>([])
+  const [status, setStatus] = useState('Loading registrations…')
+  const loadRegistrations = async () => {
+    try {
+      const response = await fetch('/api/subscriptions')
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error)
+      setRegistrations(result.subscriptions || [])
+      setStatus('')
+    } catch { setStatus('Start the local API with npm run dev:api first.') }
+  }
+  useEffect(() => { void loadRegistrations() }, [])
+  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local-only subscriber directory</p><h1>Current<br /><em>registrations.</em></h1><p>Review the people registered for local alerts. This page reads from the SQLite database on this computer and is not protected by login.</p></section><section className="registrations-card"><div className="registrations-heading"><p className="eyebrow">{registrations.length} registered subscriber{registrations.length === 1 ? '' : 's'}</p><button className="button small-button" type="button" onClick={() => void loadRegistrations()}>Refresh</button></div>{status ? <p className="form-status" role="status">{status}</p> : registrations.length === 0 ? <p className="empty-state">No users have registered yet.</p> : <div className="registration-table-wrap"><table className="registration-table"><thead><tr><th>Email</th><th>ZIP code</th><th>Consented</th><th>Registered</th></tr></thead><tbody>{registrations.map(registration => <tr key={registration.id}><td>{registration.email}</td><td>{registration.zip_code}</td><td>{new Date(registration.consented_at).toLocaleString()}</td><td>{new Date(registration.created_at).toLocaleString()}</td></tr>)}</tbody></table></div>}</section></main><Footer /></>
 }
 
 function SimulatorPage() {
@@ -83,6 +100,7 @@ function Footer() { return <footer><Logo /><p>Educational guide · Always follow
 function App() {
   const path = window.location.pathname.replace(/\/$/, '') || '/'
   if (path === '/register') return <RegisterPage />
+  if (path === '/registrations') return <RegistrationsPage />
   if (path === '/simulate') return <SimulatorPage />
   return <HomePage />
 }
