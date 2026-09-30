@@ -20,3 +20,10 @@
 
 /* Use one consistent typeface across every site element. */
 *,*::before,*::after{font-family:'DM Sans',sans-serif!important}
+
+/* Replace every remaining warm accent with the site's sky-blue palette. */
+.logo-mark,.primary,.safety{background:#5cc9ed!important;color:#102b46!important}
+.hero h1 em,h2 em,blockquote em,.feature-number,.feature-arrow,.quote-mark,.paper-front i{color:#5cc9ed!important}
+.marquee span:nth-child(2n){color:#79d8f3!important}
+.sun,.orbital-sun,.storm-icon{background:#79d8f3!important}
+.paper-back,.quote{background:#d7f3fa!important}
