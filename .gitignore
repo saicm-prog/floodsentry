@@ -4,3 +4,6 @@ dist/
 .pnpm-store/
 data/
 .tools/
+.env
+.env.*
+!.env.example
