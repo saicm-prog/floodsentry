@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState, type FormEvent } from 'react'
+import { StrictMode, useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowDown, ArrowUpRight, CloudLightning, Menu, Snowflake, Wind, X } from 'lucide-react'
 import './styles.css'
@@ -6,6 +6,13 @@ import './styles.css'
 type Storm = { id: string; title: string; summary: string; detail: string; image: string; icon: typeof Wind }
 type Notification = { id: number; zip_code: string; trigger_type: string; message: string; created_at: string }
 type Registration = { id: number; email: string; zip_code: string; consented_at: string; created_at: string }
+
+function handleRouteClick(event: MouseEvent<HTMLAnchorElement>) {
+  const href = event.currentTarget.getAttribute('href')
+  if (!href || !href.startsWith('/') || href.startsWith('/#') || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  window.dispatchEvent(new CustomEvent('flood-sentry:navigate', { detail: { href } }))
+}
 
 const storms: Storm[] = [
   { id: 'thunderstorms', title: 'Thunderstorms', summary: 'The atmosphere puts on a light show.', detail: 'A thunderstorm is a local storm produced by a cumulonimbus cloud and accompanied by lightning and thunder. Severe thunderstorms can produce hail at least 1 inch in diameter or wind gusts of 58 mph or higher.', image: 'https://images.unsplash.com/photo-1605727216801-e27ce1d0cc28?auto=format&fit=crop&w=1400&q=85', icon: CloudLightning },
@@ -21,12 +28,12 @@ const eventTypes = [
   { value: 'tornado_watch', label: 'Tornado watch' },
 ]
 
-function Logo() { return <a className="logo" href="/" aria-label="Flood Sentry home"><span className="logo-mark">✳</span><span>flood sentry</span></a> }
+function Logo() { return <a className="logo" href="/" onClick={handleRouteClick} aria-label="Flood Sentry home"><span className="logo-mark">✳</span><span>flood sentry</span></a> }
 
 function Header() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={close}>Home</a><a href="/#atlas" onClick={close}>Explore storms</a><a href="/register" onClick={close}>Register</a><a href="/registrations" onClick={close}>Registrations</a><a href="/simulate" onClick={close}>Simulate event</a><a href="/#safety" onClick={close}>Safety basics</a><a href="/#sources" onClick={close}>Sources</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
+  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/#atlas" onClick={close}>Explore storms</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/simulate" onClick={event => { close(); handleRouteClick(event) }}>Simulate event</a><a href="/#safety" onClick={close}>Safety basics</a><a href="/#sources" onClick={close}>Sources</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
 }
 
 function Card({ storm }: { storm: Storm }) {
@@ -111,17 +118,34 @@ function SimulatorPage() {
 }
 
 function HomePage() {
-  return <><Header /><main><section className="hero"><div><p className="eyebrow"><span className="pulse" /> A field guide to severe weather</p><h1>When the sky<br />gets <em>serious.</em></h1><p className="hero-text">Flood Sentry is a clear, visual introduction to the forces that shape our atmosphere—and how to stay ready when they arrive.</p><div className="hero-actions"><a className="button" href="#atlas">Explore the guide <ArrowDown size={17} /></a><a className="button secondary" href="/register">Register for alerts <ArrowUpRight size={17} /></a></div></div><div className="hero-orbit" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbital-sun" /></div></section><section className="intro section"><div><p className="eyebrow">The big picture</p><h2>Every storm<br />has a <em>story.</em></h2></div><p>Storms are disturbances in the atmosphere, ranging from a brief thunderstorm to a sprawling tropical cyclone. Their shapes, ingredients, and hazards are different—but understanding the basics helps us make better decisions.</p></section><section className="atlas section" id="atlas"><div className="section-heading"><div><p className="eyebrow">The guide / 04 entries</p><h2>Meet the <em>forces.</em></h2></div><p>Explore four of Earth’s most powerful weather systems.</p></div><div className="storm-grid">{storms.map(storm => <Card key={storm.id} storm={storm} />)}</div></section><section className="tools-section section"><div className="section-heading"><div><p className="eyebrow">Flood Sentry tools</p><h2>Stay <em>connected.</em></h2></div><p>Register for local alerts, review current subscribers, or simulate an event from one place.</p></div><div className="tools-grid"><a className="tool-card" href="/register"><span className="tool-number">01</span><strong>Register for alerts</strong><p>Join the local ZIP-code alert list.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/registrations"><span className="tool-number">02</span><strong>Current registrations</strong><p>Review the local subscriber directory.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/simulate"><span className="tool-number">03</span><strong>Simulate an event</strong><p>Create a local storm alert for testing.</p><ArrowUpRight size={19} /></a></div></section><section className="safety section" id="safety"><div><h2>Watch means<br /><em>be ready.</em></h2><p className="safety-text">Warning means take action. Have more than one way to receive alerts, know where you will shelter, and follow instructions from your local emergency managers.</p><a className="button dark" href="https://www.weather.gov/safety" target="_blank" rel="noreferrer">NWS safety hub <ArrowUpRight size={17} /></a></div><div className="safety-steps"><div><strong>01</strong><span>Get inside</span><p>Put walls between you and the weather.</p></div><div><strong>02</strong><span>Get informed</span><p>Use NOAA Weather Radio or official alerts.</p></div><div><strong>03</strong><span>Stay put</span><p>Wait for the all-clear from officials.</p></div></div></section><section className="sources section" id="sources"><p className="eyebrow">Keep exploring</p><h2>Built from<br /><em>good sources.</em></h2><div className="source-list"><a href="https://www.weather.gov/spotterguide/types" target="_blank" rel="noreferrer"><span>NOAA / National Weather Service</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/hurricane" target="_blank" rel="noreferrer"><span>Hurricane safety & science</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/tornado" target="_blank" rel="noreferrer"><span>Tornado safety & science</span><ArrowUpRight size={16} /></a></div></section></main><Footer /></>
+  return <><Header /><main><section className="hero"><div><p className="eyebrow"><span className="pulse" /> A field guide to severe weather</p><h1>When the sky<br />gets <em>serious.</em></h1><p className="hero-text">Flood Sentry is a clear, visual introduction to the forces that shape our atmosphere—and how to stay ready when they arrive.</p><div className="hero-actions"><a className="button" href="#atlas">Explore the guide <ArrowDown size={17} /></a><a className="button secondary" href="/register" onClick={handleRouteClick}>Register for alerts <ArrowUpRight size={17} /></a></div></div><div className="hero-orbit" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbital-sun" /></div></section><section className="intro section"><div><p className="eyebrow">The big picture</p><h2>Every storm<br />has a <em>story.</em></h2></div><p>Storms are disturbances in the atmosphere, ranging from a brief thunderstorm to a sprawling tropical cyclone. Their shapes, ingredients, and hazards are different—but understanding the basics helps us make better decisions.</p></section><section className="atlas section" id="atlas"><div className="section-heading"><div><p className="eyebrow">The guide / 04 entries</p><h2>Meet the <em>forces.</em></h2></div><p>Explore four of Earth’s most powerful weather systems.</p></div><div className="storm-grid">{storms.map(storm => <Card key={storm.id} storm={storm} />)}</div></section><section className="tools-section section"><div className="section-heading"><div><p className="eyebrow">Flood Sentry tools</p><h2>Stay <em>connected.</em></h2></div><p>Register for local alerts, review current subscribers, or simulate an event from one place.</p></div><div className="tools-grid"><a className="tool-card" href="/register" onClick={handleRouteClick}><span className="tool-number">01</span><strong>Register for alerts</strong><p>Join the local ZIP-code alert list.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/registrations" onClick={handleRouteClick}><span className="tool-number">02</span><strong>Current registrations</strong><p>Review the local subscriber directory.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/simulate" onClick={handleRouteClick}><span className="tool-number">03</span><strong>Simulate an event</strong><p>Create a local storm alert for testing.</p><ArrowUpRight size={19} /></a></div></section><section className="safety section" id="safety"><div><h2>Watch means<br /><em>be ready.</em></h2><p className="safety-text">Warning means take action. Have more than one way to receive alerts, know where you will shelter, and follow instructions from your local emergency managers.</p><a className="button dark" href="https://www.weather.gov/safety" target="_blank" rel="noreferrer">NWS safety hub <ArrowUpRight size={17} /></a></div><div className="safety-steps"><div><strong>01</strong><span>Get inside</span><p>Put walls between you and the weather.</p></div><div><strong>02</strong><span>Get informed</span><p>Use NOAA Weather Radio or official alerts.</p></div><div><strong>03</strong><span>Stay put</span><p>Wait for the all-clear from officials.</p></div></div></section><section className="sources section" id="sources"><p className="eyebrow">Keep exploring</p><h2>Built from<br /><em>good sources.</em></h2><div className="source-list"><a href="https://www.weather.gov/spotterguide/types" target="_blank" rel="noreferrer"><span>NOAA / National Weather Service</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/hurricane" target="_blank" rel="noreferrer"><span>Hurricane safety & science</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/tornado" target="_blank" rel="noreferrer"><span>Tornado safety & science</span><ArrowUpRight size={16} /></a></div></section></main><Footer /></>
 }
 
-function Footer() { return <footer><Logo /><p>Educational guide · Always follow local official guidance.</p><a href="/">Back to top ↑</a></footer> }
+function Footer() { return <footer><Logo /><p>Educational guide · Always follow local official guidance.</p><a href="/" onClick={handleRouteClick}>Back to top ↑</a></footer> }
 
 function App() {
-  const path = window.location.pathname.replace(/\/$/, '') || '/'
-  if (path === '/register') return <RegisterPage />
-  if (path === '/registrations') return <RegistrationsPage />
-  if (path === '/simulate') return <SimulatorPage />
-  return <HomePage />
+  const readPath = () => window.location.pathname.replace(/\/$/, '') || '/'
+  const [path, setPath] = useState(readPath)
+  const [transition, setTransition] = useState<'idle' | 'leaving' | 'entering'>('idle')
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const href = (event as CustomEvent<{ href: string }>).detail.href
+      if (href === window.location.pathname) return
+      setTransition('leaving')
+      window.setTimeout(() => {
+        window.history.pushState({}, '', href)
+        setPath(readPath())
+        setTransition('entering')
+        window.setTimeout(() => setTransition('idle'), 420)
+      }, 180)
+    }
+    const handlePopState = () => { setPath(readPath()); setTransition('entering'); window.setTimeout(() => setTransition('idle'), 420) }
+    window.addEventListener('flood-sentry:navigate', navigate)
+    window.addEventListener('popstate', handlePopState)
+    return () => { window.removeEventListener('flood-sentry:navigate', navigate); window.removeEventListener('popstate', handlePopState) }
+  }, [])
+  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/simulate' ? <SimulatorPage /> : <HomePage />
+  return <div className={`route-frame route-${transition}`} key={path}>{page}</div>
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
