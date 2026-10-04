@@ -57,7 +57,7 @@
 /* Give Stay connected the same sky-blue / dark-blue contrast as the safety panel. */
 .tools-section{background:#5cc9ed!important;color:#102b46!important}
 .tools-section .eyebrow,.tools-section .section-heading>p{color:#205c78!important}
-.tools-section .eyebrow::after{color:#0d2942!important}
+.tools-section .eyebrow::after{color:#52636b!important}
 .tools-section h2 em{color:#f7fbff!important}
 .tools-section .tool-card{background:#102b46;border-color:#102b46;color:#f7fbff}
 .tools-section .tool-card p{color:#b9d1df}
