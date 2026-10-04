@@ -40,3 +40,13 @@
 .route-frame{min-height:100vh}.route-leaving{animation:page-fade-out .18s ease forwards}.route-entering{animation:page-fade-in .42s ease both}@keyframes page-fade-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(5px)}}@keyframes page-fade-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.route-leaving,.route-entering{animation:none}}
 .hero{margin-left:auto;margin-right:auto;padding-left:40px;padding-right:40px}.intro,.atlas,.tools-section,.safety,.sources{border-top:1px dotted rgba(247,251,255,.6)}
 @media(max-width:720px){.hero{padding-left:22px;padding-right:22px}}
+
+/* Keep the hero's original guide label and use a consistent placeholder label everywhere else. */
+.eyebrow:not(.hero .eyebrow){font-size:0;color:transparent}
+.eyebrow:not(.hero .eyebrow)::after{content:'placeholder';font:11px 'DM Sans',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#899eaa}
+.hero .eyebrow{font-size:11px;color:#73899a}
+.hero .eyebrow::after{content:none}
+
+/* Consistent section rhythm with a clearly visible soft dotted divider. */
+.intro,.atlas,.tools-section,.safety,.sources{border-top:2px dotted rgba(247,251,255,.6);padding-top:96px;padding-bottom:96px}
+@media(max-width:720px){.intro,.atlas,.tools-section,.safety,.sources{padding-top:72px;padding-bottom:72px}}
