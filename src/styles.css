@@ -63,6 +63,12 @@
 .tools-section .tool-card p{color:#b9d1df}
 .tools-section .tool-number,.tools-section .tool-card svg{color:#79d8f3}
 
+/* Make the top navigation feel interactive when the pointer passes over a link. */
+.nav a{position:relative;padding:9px 10px;border-radius:6px;transition:color .2s ease,background-color .2s ease,transform .2s ease}
+.nav a::after{content:'';position:absolute;left:10px;right:10px;bottom:4px;height:2px;background:#79d8f3;transform:scaleX(0);transform-origin:center;transition:transform .2s ease}
+.nav a:hover,.nav a:focus-visible{color:#f7fbff;background:rgba(121,216,243,.14);transform:translateY(-1px);outline:none}
+.nav a:hover::after,.nav a:focus-visible::after{transform:scaleX(1)}
+
 /* Put the sources title on the left and its supporting label on the right. */
 .sources .eyebrow{grid-column:2;grid-row:1}
 .sources h2{grid-column:1;grid-row:1}
