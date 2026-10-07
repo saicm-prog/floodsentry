@@ -28,6 +28,7 @@ db.exec(`
 `)
 
 const json = (response, status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); response.end(JSON.stringify(body)) }
+const streamEvent = (response, body) => response.write(`data: ${JSON.stringify(body)}\n\n`)
 const readBody = async request => {
   let body = ''
   for await (const chunk of request) {
@@ -56,6 +57,7 @@ async function sendResendAlert({ recipients, zipCode, triggerType, message, subj
 }
 
 const server = createServer(async (request, response) => {
+  let isEventStream = false
   if (request.method === 'OPTIONS') { response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' }); return response.end() }
   try {
     if (request.method === 'POST' && request.url === '/api/subscriptions') {
@@ -68,13 +70,18 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/api/subscriptions') return json(response, 200, { subscriptions: db.prepare('SELECT id, email, zip_code, consented_at, created_at FROM subscriptions ORDER BY id DESC').all() })
     if (request.method === 'POST' && request.url === '/api/test-alert') {
       const { weatherReport } = await readBody(request)
-      const result = await simulateWeatherReport(weatherReport, { db, sendAlert: sendResendAlert })
-      return json(response, 201, result)
+      response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' })
+      isEventStream = true
+      const result = await simulateWeatherReport(weatherReport, { db, sendAlert: sendResendAlert, onStage: stage => streamEvent(response, { type: 'stage', stage }) })
+      streamEvent(response, { type: 'complete', result })
+      return response.end()
     }
     if (request.method === 'GET' && request.url === '/api/notifications') return json(response, 200, { notifications: db.prepare('SELECT * FROM notifications ORDER BY id DESC LIMIT 20').all() })
     return json(response, 404, { error: 'Not found' })
   } catch (error) {
-    if (error instanceof SimulatorError) return json(response, error.status, { error: error.message })
+    const message = error instanceof SimulatorError ? error.message : error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 'That email is already subscribed for local alerts.' : 'Local server error.'
+    if (isEventStream) { streamEvent(response, { type: 'error', error: message }); return response.end() }
+    if (error instanceof SimulatorError) return json(response, error.status, { error: message })
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return json(response, 409, { error: 'That email is already subscribed for local alerts.' })
     console.error(error); return json(response, 500, { error: 'Local server error.' })
   }

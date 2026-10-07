@@ -149,6 +149,15 @@ test('multi-ZIP event saves once per ZIP and emails only matching subscribers on
   } finally { db.close() }
 })
 
+test('reports real processing stages in order', async () => {
+  const db = database()
+  try {
+    const stages = []
+    await simulateWeatherReport(report, { ...provider(), db, onStage: stage => stages.push(stage.id), sendAlert: async () => ({ status: 'sent', sent: 2, failed: 0 }) })
+    assert.deepEqual(stages, ['starting', 'areas', 'zip-codes', 'message', 'matching', 'saving', 'sending'])
+  } finally { db.close() }
+})
+
 test('draft failure creates no notifications and sends nothing', async () => {
   const db = database()
   try {

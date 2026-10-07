@@ -2,7 +2,6 @@ import { StrictMode, useEffect, useState, type FormEvent, type MouseEvent } from
 import { createRoot } from 'react-dom/client'
 import { ArrowDown, ArrowUpRight, CloudLightning, Menu, Snowflake, Wind, X } from 'lucide-react'
 import './styles.css'
-import { sampleWeatherReport } from './sample-weather-report'
 
 type Storm = { id: string; title: string; summary: string; detail: string; image: string; icon: typeof Wind }
 type Notification = { id: number; zip_code: string; trigger_type: string; message: string; created_at: string }
@@ -85,10 +84,43 @@ type WeatherAnalysis = {
   zipCodes: { zipCode: string; area: string; evidence: string; sourceUrl: string }[];
   sources: { url: string; title: string }[]; subject: string; message: string;
 }
+type ProcessingStage = { id: string; label: string }
+type SimulationResult = { analysis: WeatherAnalysis; message: string; email: { status: string; sent: number; failed: number } }
+
+const formatElapsed = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+
+async function readSimulationStream(response: Response, onEvent: (event: { type: string; stage?: ProcessingStage; result?: SimulationResult; error?: string }) => void) {
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('text/event-stream')) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || 'The simulator returned an unexpected error.')
+  }
+  if (!response.body) throw new Error('The simulator did not return a progress stream.')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+    for (const item of events) {
+      const data = item.split('\n').find(line => line.startsWith('data: '))?.slice(6)
+      if (data) onEvent(JSON.parse(data))
+    }
+    if (done) break
+  }
+  if (buffer.trim()) {
+    const data = buffer.split('\n').find(line => line.startsWith('data: '))?.slice(6)
+    if (data) onEvent(JSON.parse(data))
+  }
+}
 
 function SimulatorPage() {
-  const [weatherReport, setWeatherReport] = useState(sampleWeatherReport)
+  const [weatherReport, setWeatherReport] = useState('')
   const [busy, setBusy] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [stages, setStages] = useState<ProcessingStage[]>([])
   const [analysis, setAnalysis] = useState<WeatherAnalysis | null>(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
@@ -105,19 +137,32 @@ function SimulatorPage() {
     } catch { setHistoryError('Recent events could not be loaded. Please check the local server.') }
   }
   useEffect(() => { void loadNotifications() }, [])
+  useEffect(() => {
+    if (!busy) return
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 250)
+    return () => window.clearInterval(timer)
+  }, [busy])
+
+  const receiveStage = (stage: ProcessingStage) => setStages(current => current.some(item => item.id === stage.id) ? current : [...current, stage])
+
   const sendTest = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    setBusy(true); setAnalysis(null); setError('')
-    setStatus('Looking up affected ZIP codes, preparing the alert, and sending test emails. This may take a few minutes…')
+    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Starting report analysis' }]); setAnalysis(null); setError(''); setStatus('')
+    let finalResult: SimulationResult | undefined
     try {
       const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'The simulator returned an unexpected error.')
-      setAnalysis(result.analysis)
-      setStatus(result.message)
-      if (result.email?.status === 'not_configured') setError('The event was saved, but no email was sent because Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.')
-      if (result.email?.status === 'partial_failure') setError(`The event was saved, but email delivery was incomplete: ${result.email.sent} sent and ${result.email.failed} failed. Running it again will send another test email to all matching subscribers.`)
+      await readSimulationStream(response, update => {
+        if (update.type === 'stage' && update.stage) receiveStage(update.stage)
+        if (update.type === 'error') throw new Error(update.error || 'The simulator returned an unexpected error.')
+        if (update.type === 'complete' && update.result) finalResult = update.result
+      })
+      if (!finalResult) throw new Error('The simulator finished without a result.')
+      setAnalysis(finalResult.analysis)
+      setStatus(finalResult.message)
+      if (finalResult.email.status === 'not_configured') setError('The event was saved, but no email was sent because Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.')
+      if (finalResult.email.status === 'partial_failure') setError(`The event was saved, but email delivery was incomplete: ${finalResult.email.sent} sent and ${finalResult.email.failed} failed. Running it again will send another test email to all matching subscribers.`)
       await loadNotifications()
     } catch (cause) {
       setStatus('')
@@ -129,12 +174,17 @@ function SimulatorPage() {
     <section className="simulator-card weather-report-card">
       <form onSubmit={sendTest} aria-busy={busy}>
         <label htmlFor="weather-report">Weather report</label>
-        <textarea id="weather-report" value={weatherReport} onChange={event => setWeatherReport(event.target.value)} rows={17} minLength={40} maxLength={20000} required disabled={busy} aria-describedby="report-help" />
-        <p id="report-help">The example is a historical bulletin from June 10, 2012. Emails are labeled TEST. ZIP coverage is estimated from the places named in the report.</p>
+        <textarea id="weather-report" value={weatherReport} onChange={event => setWeatherReport(event.target.value)} rows={17} minLength={40} maxLength={20000} required disabled={busy} placeholder="Paste the complete weather bulletin here…" aria-describedby="report-help" />
+        <p id="report-help">Paste the full report, including the affected places and state. Emails are labeled TEST, and ZIP coverage is estimated from the places named in the report.</p>
         <button className="button" type="submit" disabled={busy}>{busy ? 'Processing report…' : 'Simulate and send test alerts'} <ArrowUpRight size={17} /></button>
         {status && <p className="form-status success-status" role="status">{status}</p>}
       </form>
     </section>
+    {busy && <section className="simulation-progress" aria-live="polite" aria-label="Simulation progress">
+      <div><p className="eyebrow">Processing</p><h2>Working through<br />the <em>report.</em></h2></div>
+      <div className="elapsed-time"><span>Elapsed time</span><strong>{formatElapsed(elapsedSeconds)}</strong></div>
+      <ol>{stages.map((stage, index) => <li key={stage.id} className={index === stages.length - 1 ? 'current' : 'complete'}><span>{index === stages.length - 1 ? '●' : '✓'}</span>{stage.label}</li>)}</ol>
+    </section>}
     {analysis && <section className="notifications-card weather-results" aria-label="Simulation results">
       <h2>Simulation results</h2>
       <p><strong>{analysis.eventType}</strong> — {analysis.areas.join(', ')}</p>
