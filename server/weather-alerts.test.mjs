@@ -53,12 +53,74 @@ test('missing key and invalid reports stop before any provider call', async () =
   await assert.rejects(analyzeWeatherReport(report, { apiKey: '' }), /OPENAI_API_KEY/)
 })
 
-test('empty coverage, malformed ZIPs, and invented citations prevent drafting', async () => {
-  for (const zipCodes of [[], [{ ...coverage.zipCodes[0], zipCode: 'TNC011' }], [{ ...coverage.zipCodes[0], sourceUrl: 'https://invented.example' }]]) {
+test('empty coverage and malformed ZIPs prevent drafting', async () => {
+  for (const zipCodes of [[], [{ ...coverage.zipCodes[0], zipCode: 'TNC011' }]]) {
     const mock = provider({ ...coverage, zipCodes })
-    await assert.rejects(analyzeWeatherReport(report, mock), /No supported|valid search evidence/)
+    await assert.rejects(analyzeWeatherReport(report, mock), /No supported|invalid ZIP codes/)
     assert.equal(mock.calls.length, 1)
   }
+})
+
+test('tracking parameters and fragments do not invalidate an otherwise matching source', async () => {
+  const mock = provider({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], sourceUrl: `${sourceUrl}?utm_source=chatgpt.com#zip-list` }] })
+  const result = await analyzeWeatherReport(report, mock)
+  assert.equal(mock.calls.length, 2)
+  assert.equal(result.zipCodes[0].sourceUrl, sourceUrl)
+  assert.equal(result.sources.length, 1)
+})
+
+test('pages opened directly are accepted even without search source lists', async () => {
+  for (const actionType of ['open_page', 'find_in_page']) {
+    let calls = 0
+    const result = await analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => {
+      if (++calls > 1) return modelResponse(draft)
+      const payload = await modelResponse(coverage, true).json()
+      payload.output[0] = { type: 'web_search_call', status: 'completed', action: { type: actionType, url: sourceUrl } }
+      return { ok: true, json: async () => payload }
+    } })
+    assert.equal(calls, 2)
+    assert.equal(result.sources[0].url, sourceUrl)
+  }
+})
+
+test('an unsupported citation is repaired with one search before drafting', async () => {
+  const requests = []
+  const result = await analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async (_url, options) => {
+    requests.push(JSON.parse(options.body))
+    if (requests.length === 1) return modelResponse({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], sourceUrl: 'https://invented.example' }] }, true)
+    return modelResponse(requests.length === 2 ? coverage : draft, requests.length === 2)
+  } })
+  assert.equal(requests.length, 3)
+  assert.equal(requests[1].tools[0].type, 'web_search')
+  assert.match(requests[1].input, /consultedSources/)
+  assert.equal(requests[2].tools, undefined)
+  assert.equal(result.zipCodes.length, 2)
+})
+
+test('invented or meaningfully different URLs still fail after one retry without saving or sending', async () => {
+  for (const badUrl of ['https://invented.example', `${sourceUrl}?county=another`, 'https://example.org/other-county']) {
+    const db = database()
+    let calls = 0
+    try {
+      await assert.rejects(simulateWeatherReport(report, {
+        db, apiKey: 'test-key', sendAlert: () => assert.fail('Must not send'),
+        fetchImpl: async () => { calls++; return modelResponse({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], sourceUrl: badUrl }] }, true) },
+      }), /could not be verified after an automatic retry/)
+      assert.equal(calls, 2)
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 0)
+    } finally { db.close() }
+  }
+})
+
+test('failed page opens are not treated as evidence', async () => {
+  let calls = 0
+  await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => {
+    calls++
+    const payload = await modelResponse(coverage, true).json()
+    payload.output[0] = { type: 'web_search_call', status: 'failed', action: { type: 'open_page', url: sourceUrl } }
+    return { ok: true, json: async () => payload }
+  } }), /could not be verified after an automatic retry/)
+  assert.equal(calls, 2)
 })
 
 test('leading zeroes survive normalization', async () => {
