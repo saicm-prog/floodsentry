@@ -54,13 +54,13 @@ function RegisterPage() {
   return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local preview / email alerts</p><h1>Stay ahead<br /><em>of the weather.</em></h1><p>Register by ZIP code for local alerts. Your registration is stored on this computer, and matching simulated events can send email through the configured Resend account.</p></section><section className="register-card"><SubscribeForm /></section></main><Footer /></>
 }
 
-function ErrorModal({ message, onClose }: { message: string; onClose: () => void }) {
+function ErrorModal({ title = 'The event could not finish cleanly.', message, onClose }: { title?: string; message: string; onClose: () => void }) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [onClose])
-  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}><section className="error-modal" role="alertdialog" aria-modal="true" aria-labelledby="simulator-error-title" aria-describedby="simulator-error-message"><button className="modal-close" type="button" onClick={onClose} aria-label="Dismiss error"><X size={20} /></button><span className="modal-icon" aria-hidden="true">!</span><p className="eyebrow">Simulator error</p><h2 id="simulator-error-title">The event could not finish cleanly.</h2><p id="simulator-error-message">{message}</p><button className="button" type="button" onClick={onClose}>Dismiss</button></section></div>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}><section className="error-modal" role="alertdialog" aria-modal="true" aria-labelledby="simulator-error-title" aria-describedby="simulator-error-message"><button className="modal-close" type="button" onClick={onClose} aria-label="Dismiss error"><X size={20} /></button><span className="modal-icon" aria-hidden="true">!</span><p className="eyebrow error-eyebrow">Simulator error</p><h2 id="simulator-error-title">{title}</h2><p id="simulator-error-message">{message}</p><button className="button" type="button" onClick={onClose}>Dismiss</button></section></div>
 }
 
 function RegistrationsPage() {
@@ -85,7 +85,9 @@ type WeatherAnalysis = {
   sources: { url: string; title: string }[]; subject: string; message: string;
 }
 type ProcessingStage = { id: string; label: string }
-type SimulationResult = { analysis: WeatherAnalysis; message: string; email: { status: string; sent: number; failed: number } }
+type DeliveryResult = { status: string; sent: number; failed: number; details?: string[] }
+type SimulationResult = { analysis: WeatherAnalysis; message: string; email: DeliveryResult }
+type SimulatorIssue = { title: string; message: string }
 
 const formatElapsed = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
@@ -123,7 +125,8 @@ function SimulatorPage() {
   const [stages, setStages] = useState<ProcessingStage[]>([])
   const [analysis, setAnalysis] = useState<WeatherAnalysis | null>(null)
   const [status, setStatus] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<SimulatorIssue | null>(null)
+  const [delivery, setDelivery] = useState<DeliveryResult | null>(null)
   const [historyError, setHistoryError] = useState('')
   const [notifications, setNotifications] = useState<Notification[]>([])
 
@@ -149,7 +152,7 @@ function SimulatorPage() {
   const sendTest = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Starting report analysis' }]); setAnalysis(null); setError(''); setStatus('')
+    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Starting report analysis' }]); setAnalysis(null); setDelivery(null); setError(null); setStatus('')
     let finalResult: SimulationResult | undefined
     try {
       const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
@@ -160,13 +163,14 @@ function SimulatorPage() {
       })
       if (!finalResult) throw new Error('The simulator finished without a result.')
       setAnalysis(finalResult.analysis)
+      setDelivery(finalResult.email)
       setStatus(finalResult.message)
-      if (finalResult.email.status === 'not_configured') setError('The event was saved, but no email was sent because Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.')
-      if (finalResult.email.status === 'partial_failure') setError(`The event was saved, but email delivery was incomplete: ${finalResult.email.sent} sent and ${finalResult.email.failed} failed. Running it again will send another test email to all matching subscribers.`)
+      if (finalResult.email.status === 'not_configured') setError({ title: 'Email delivery is not configured.', message: finalResult.email.details?.join(' ') || 'The event was saved, but no email was sent. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.' })
+      if (finalResult.email.status === 'partial_failure') setError({ title: 'Alert delivery needs attention.', message: `The event was saved. ${finalResult.email.sent} email(s) sent and ${finalResult.email.failed} failed. ${finalResult.email.details?.join(' ') || 'Resend did not provide more detail.'} Running the simulator again sends another test email to every matching subscriber.` })
       await loadNotifications()
     } catch (cause) {
       setStatus('')
-      setError(cause instanceof Error && !(cause instanceof TypeError) && !(cause instanceof SyntaxError) ? cause.message : 'The simulator lost contact with the local API. Check recent events before trying again; an event may already have been saved or sent.')
+      setError({ title: 'The simulation could not finish.', message: cause instanceof Error && !(cause instanceof TypeError) && !(cause instanceof SyntaxError) ? cause.message : 'The simulator lost contact with the local API. Check recent events before trying again; an event may already have been saved or sent.' })
     } finally { setBusy(false) }
   }
   return <><Header /><main className="page-shell">
@@ -193,12 +197,13 @@ function SimulatorPage() {
       <p>{analysis.coverageNotes}</p>
       <ul className="zip-results">{analysis.zipCodes.map(zip => <li key={zip.zipCode}><strong>{zip.zipCode}</strong> — {zip.area}<p>{zip.evidence} <a href={zip.sourceUrl} target="_blank" rel="noreferrer">Source for {zip.zipCode} ↗</a></p></li>)}</ul>
       <h3>Resident alert</h3><strong>{analysis.subject}</strong><p className="alert-message">{analysis.message}</p>
+      {delivery && <section className={`delivery-summary delivery-${delivery.status}`}><h3>Email delivery</h3><p><strong>{delivery.sent} sent</strong> · {delivery.failed} failed</p>{delivery.details?.length ? <ul>{delivery.details.map((detail, index) => <li key={`${index}-${detail}`}>{detail}</li>)}</ul> : delivery.status === 'sent' ? <p>Resend accepted every matching email for delivery.</p> : <p>No registered subscriber matched the affected ZIP codes.</p>}</section>}
       <details><summary>Lookup sources</summary><ul>{analysis.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul></details>
     </section>}
     <section className="notifications-card weather-results"><h2>Recent local events</h2>
       {historyError ? <p role="alert">{historyError}</p> : notifications.length === 0 ? <p className="empty-state">No simulated events yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p className="alert-message">{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}
     </section>
-  </main><Footer />{error && <ErrorModal message={error} onClose={() => setError('')} />}</>
+  </main><Footer />{error && <ErrorModal title={error.title} message={error.message} onClose={() => setError(null)} />}</>
 }
 
 function HomePage() {
