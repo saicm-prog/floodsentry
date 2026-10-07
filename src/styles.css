@@ -63,6 +63,17 @@
 .tools-section .tool-card p{color:#b9d1df}
 .tools-section .tool-number,.tools-section .tool-card svg{color:#79d8f3}
 
+.weather-report-card textarea{width:100%;resize:vertical;min-height:300px;border:1px solid #78b9cc;border-radius:4px;background:#eafaff;color:#102b46;padding:18px;font-size:15px;line-height:1.6}
+.weather-report-card textarea:focus-visible{outline:3px solid #79d8f3;outline-offset:3px}
+.weather-report-card form>p{margin:0;color:#c5dbe7;line-height:1.6}
+.weather-report-card button:disabled{opacity:.65;cursor:wait}
+.weather-results{margin-top:28px;overflow-wrap:anywhere}
+.weather-results h2{font-size:32px;line-height:1.2;letter-spacing:-.03em;margin-bottom:24px}
+.weather-results h3{margin-top:32px}.weather-results p{color:#c5dbe7;line-height:1.6}
+.weather-results a{color:#79d8f3}.weather-results summary{cursor:pointer;color:#bcefff}
+.zip-results{padding-left:22px}.zip-results li{margin-bottom:18px}.zip-results p{margin:4px 0}
+.alert-message{white-space:pre-wrap}
+
 /* Make the top navigation feel interactive when the pointer passes over a link. */
 .nav a{position:relative;padding:9px 10px;border-radius:6px;transition:color .2s ease,background-color .2s ease,transform .2s ease}
 .nav a::after{content:'';position:absolute;left:10px;right:10px;bottom:4px;height:2px;background:#79d8f3;transform:scaleX(0);transform-origin:center;transition:transform .2s ease}

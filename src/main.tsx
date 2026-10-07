@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState, type FormEvent, type MouseEvent } from
 import { createRoot } from 'react-dom/client'
 import { ArrowDown, ArrowUpRight, CloudLightning, Menu, Snowflake, Wind, X } from 'lucide-react'
 import './styles.css'
+import { sampleWeatherReport } from './sample-weather-report'
 
 type Storm = { id: string; title: string; summary: string; detail: string; image: string; icon: typeof Wind }
 type Notification = { id: number; zip_code: string; trigger_type: string; message: string; created_at: string }
@@ -19,13 +20,6 @@ const storms: Storm[] = [
   { id: 'tornadoes', title: 'Tornadoes', summary: 'Small in scale. Enormous in force.', detail: 'A tornado is a violently rotating column of air extending from the base of a thunderstorm down to the ground. They can occur at any time of day or night and at any time of year.', image: 'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?auto=format&fit=crop&w=1400&q=85', icon: Wind },
   { id: 'hurricanes', title: 'Hurricanes', summary: 'A vast engine powered by warm ocean water.', detail: 'Hurricanes are tropical cyclones with maximum sustained winds of 74 mph or greater. Their hazards include storm surge, flooding, extreme winds, and tornadoes.', image: '/images/hurricane-weather-scene.png', icon: ArrowUpRight },
   { id: 'blizzards', title: 'Blizzards', summary: 'When snow and wind erase the horizon.', detail: 'A blizzard is a winter storm with frequent wind gusts of at least 35 mph and falling or blowing snow that reduces visibility to a quarter mile or less for at least three hours.', image: 'https://images.unsplash.com/photo-1483664852095-d6cc6870702d?auto=format&fit=crop&w=1400&q=85', icon: Snowflake },
-]
-
-const eventTypes = [
-  { value: 'dummy_damage_risk', label: 'Dummy damage risk' },
-  { value: 'severe_wind', label: 'Severe wind' },
-  { value: 'flash_flooding', label: 'Flash flooding' },
-  { value: 'tornado_watch', label: 'Tornado watch' },
 ]
 
 function Logo() { return <a className="logo" href="/" onClick={handleRouteClick} aria-label="Flood Sentry home"><span className="logo-mark">✳</span><span>flood sentry</span></a> }
@@ -86,35 +80,75 @@ function RegistrationsPage() {
   return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local-only subscriber directory</p><h1>Current<br /><em>registrations.</em></h1><p>Review the people registered for local alerts. This page reads from the SQLite database on this computer and is not protected by login.</p></section><section className="registrations-card"><div className="registrations-heading"><p className="eyebrow">{registrations.length} registered subscriber{registrations.length === 1 ? '' : 's'}</p><button className="button small-button" type="button" onClick={() => void loadRegistrations()}>Refresh</button></div>{status ? <p className="form-status" role="status">{status}</p> : registrations.length === 0 ? <p className="empty-state">No users have registered yet.</p> : <div className="registration-table-wrap"><table className="registration-table"><thead><tr><th>Email</th><th>ZIP code</th><th>Consented</th><th>Registered</th></tr></thead><tbody>{registrations.map(registration => <tr key={registration.id}><td>{registration.email}</td><td>{registration.zip_code}</td><td>{new Date(registration.consented_at).toLocaleString()}</td><td>{new Date(registration.created_at).toLocaleString()}</td></tr>)}</tbody></table></div>}</section></main><Footer /></>
 }
 
+type WeatherAnalysis = {
+  eventType: string; areas: string[]; issuedAt: string; expiresAt: string; coverageNotes: string;
+  zipCodes: { zipCode: string; area: string; evidence: string; sourceUrl: string }[];
+  sources: { url: string; title: string }[]; subject: string; message: string;
+}
+
 function SimulatorPage() {
-  const [zipCode, setZipCode] = useState('')
-  const [triggerType, setTriggerType] = useState('dummy_damage_risk')
+  const [weatherReport, setWeatherReport] = useState(sampleWeatherReport)
+  const [busy, setBusy] = useState(false)
+  const [analysis, setAnalysis] = useState<WeatherAnalysis | null>(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const [historyError, setHistoryError] = useState('')
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   const loadNotifications = async () => {
     try {
       const response = await fetch('/api/notifications')
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Could not load recent events.')
+      if (!response.ok) throw new Error()
       setNotifications(result.notifications || [])
-    } catch { setError('Recent events could not be loaded. Start the local API with npm run dev:api and try again.') }
+      setHistoryError('')
+    } catch { setHistoryError('Recent events could not be loaded. Please check the local server.') }
   }
   useEffect(() => { void loadNotifications() }, [])
   const sendTest = async (event: FormEvent) => {
-    event.preventDefault(); setStatus('Creating local event…'); setError('')
+    event.preventDefault()
+    if (busy) return
+    setBusy(true); setAnalysis(null); setError('')
+    setStatus('Looking up affected ZIP codes, preparing the alert, and sending test emails. This may take a few minutes…')
     try {
-      const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zipCode, triggerType }) })
+      const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
       const result = await response.json()
-      if (!response.ok) { setStatus(''); setError(result.error || 'The simulator returned an unexpected error.'); return }
-      setStatus(result.message || 'Local event created.')
-      if (result.email?.status === 'not_configured') setError('The event was saved, but no email was sent because Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the project .env file, then restart the API.')
-      if (result.email?.status === 'partial_failure') setError(`The event was saved, but email delivery was incomplete. ${result.email.sent} alert(s) sent and ${result.email.failed} failed.`)
-      setZipCode(''); await loadNotifications()
-    } catch { setStatus(''); setError('The simulator could not reach the local API. Start it with npm run dev:api and try again.') }
+      if (!response.ok) throw new Error(result.error || 'The simulator returned an unexpected error.')
+      setAnalysis(result.analysis)
+      setStatus(result.message)
+      if (result.email?.status === 'not_configured') setError('The event was saved, but no email was sent because Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.')
+      if (result.email?.status === 'partial_failure') setError(`The event was saved, but email delivery was incomplete: ${result.email.sent} sent and ${result.email.failed} failed. Running it again will send another test email to all matching subscribers.`)
+      await loadNotifications()
+    } catch (cause) {
+      setStatus('')
+      setError(cause instanceof Error && !(cause instanceof TypeError) && !(cause instanceof SyntaxError) ? cause.message : 'The simulator lost contact with the local API. Check recent events before trying again; an event may already have been saved or sent.')
+    } finally { setBusy(false) }
   }
-  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Trigger a local<br /><em>storm event.</em></h1><p>Create a local alert record for a ZIP code and see how many registered subscribers match. When Resend is configured, those subscribers receive the alert by email.</p></section><section className="simulator-grid"><div className="simulator-card"><form onSubmit={sendTest}><label>U.S. ZIP code<input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="00000" required /></label><label>Event type<select value={triggerType} onChange={event => setTriggerType(event.target.value)}>{eventTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label><button className="button" type="submit">Run local event <ArrowUpRight size={17} /></button>{status && <p className="form-status success-status" role="status">{status}</p>}</form></div><div className="notifications-card"><p className="eyebrow">Recent local events</p>{notifications.length === 0 ? <p className="empty-state">No simulated events yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p>{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}</div></section></main><Footer />{error && <ErrorModal message={error} onClose={() => setError('')} />}</>
+  return <><Header /><main className="page-shell">
+    <section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Simulate a<br /><em>weather report.</em></h1><p>Paste a weather bulletin to find affected ZIP codes and send a tailored test alert to matching subscribers.</p></section>
+    <section className="simulator-card weather-report-card">
+      <form onSubmit={sendTest} aria-busy={busy}>
+        <label htmlFor="weather-report">Weather report</label>
+        <textarea id="weather-report" value={weatherReport} onChange={event => setWeatherReport(event.target.value)} rows={17} minLength={40} maxLength={20000} required disabled={busy} aria-describedby="report-help" />
+        <p id="report-help">The example is a historical bulletin from June 10, 2012. Emails are labeled TEST. ZIP coverage is estimated from the places named in the report.</p>
+        <button className="button" type="submit" disabled={busy}>{busy ? 'Processing report…' : 'Simulate and send test alerts'} <ArrowUpRight size={17} /></button>
+        {status && <p className="form-status success-status" role="status">{status}</p>}
+      </form>
+    </section>
+    {analysis && <section className="notifications-card weather-results" aria-label="Simulation results">
+      <h2>Simulation results</h2>
+      <p><strong>{analysis.eventType}</strong> — {analysis.areas.join(', ')}</p>
+      <p>Report issued: {analysis.issuedAt}<br />Report expires: {analysis.expiresAt}</p>
+      <h3>Affected ZIP codes ({analysis.zipCodes.length})</h3>
+      <p>{analysis.coverageNotes}</p>
+      <ul className="zip-results">{analysis.zipCodes.map(zip => <li key={zip.zipCode}><strong>{zip.zipCode}</strong> — {zip.area}<p>{zip.evidence} <a href={zip.sourceUrl} target="_blank" rel="noreferrer">Source for {zip.zipCode} ↗</a></p></li>)}</ul>
+      <h3>Resident alert</h3><strong>{analysis.subject}</strong><p className="alert-message">{analysis.message}</p>
+      <details><summary>Lookup sources</summary><ul>{analysis.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul></details>
+    </section>}
+    <section className="notifications-card weather-results"><h2>Recent local events</h2>
+      {historyError ? <p role="alert">{historyError}</p> : notifications.length === 0 ? <p className="empty-state">No simulated events yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p className="alert-message">{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}
+    </section>
+  </main><Footer />{error && <ErrorModal message={error} onClose={() => setError('')} />}</>
 }
 
 function HomePage() {

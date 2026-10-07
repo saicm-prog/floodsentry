@@ -8,6 +8,7 @@
     "dev:api": "node --env-file-if-exists=.env server/index.mjs",
     "dev:all": "npm-run-all --parallel dev dev:api",
     "build": "tsc -b && vite build",
+    "test": "node --test server/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
