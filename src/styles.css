@@ -96,5 +96,5 @@
 
 /* Tall topographic texture scrolls naturally with the document, with no vertical distortion. */
 html{background:#102b46}
-body{background-image:linear-gradient(rgba(16,43,70,.68),rgba(16,43,70,.74)),url('/images/topographic-contours-background-tall.png');background-color:#102b46;background-position:center top;background-size:cover;background-repeat:no-repeat;background-attachment:scroll}
+body{background-image:linear-gradient(rgba(16,43,70,.68),rgba(16,43,70,.74)),url('/images/topographic-contours-background-tall.png');background-color:#102b46;background-position:center top;background-size:100% auto;background-repeat:repeat-y;background-attachment:scroll}
 .hero,.intro,.atlas,.sources{background-color:transparent}
