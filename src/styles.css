@@ -94,7 +94,7 @@
 @media(max-width:720px){.sources .eyebrow,.sources h2,.sources .source-list{grid-column:auto;grid-row:auto}}
 @media(max-width:720px){.simulation-progress{grid-template-columns:1fr;padding:28px 24px}.elapsed-time{text-align:left}.simulation-progress ol{grid-column:auto}}
 
-/* Site-wide topographic texture: stretched over the document so it moves with the content. */
+/* Tall topographic texture scrolls naturally with the document, with no vertical distortion. */
 html{background:#102b46}
-body{background-image:linear-gradient(rgba(16,43,70,.82),rgba(16,43,70,.88)),url('/images/topographic-contours-background.png');background-color:#102b46;background-position:center top;background-size:100% 100%;background-repeat:no-repeat;background-attachment:scroll}
+body{background-image:linear-gradient(rgba(16,43,70,.82),rgba(16,43,70,.88)),url('/images/topographic-contours-background-tall.png');background-color:#102b46;background-position:center top;background-size:cover;background-repeat:no-repeat;background-attachment:scroll}
 .hero,.intro,.atlas,.sources{background-color:transparent}
