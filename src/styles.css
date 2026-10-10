@@ -104,8 +104,7 @@ body{background-image:linear-gradient(rgba(16,43,70,.68),rgba(16,43,70,.74)),url
 
 /* Why Flood Sentry: a focused mission section rooted in the need for earlier action. */
 .why{display:grid;grid-template-columns:1fr 1.6fr;gap:80px;padding-top:96px;padding-bottom:96px;border-top:2px dotted rgba(247,251,255,.6)}
-.why h2{font-size:clamp(48px,5vw,70px);line-height:.98;letter-spacing:-.065em}
-.why-copy{max-width:650px}.why-copy p{margin:0 0 24px;color:#d7e9f5;font-size:18px;line-height:1.65}.why-copy p:first-child{color:#f7fbff;font-size:20px;font-weight:500}.why-copy .text-link{margin-top:34px}
+.why-copy{max-width:650px}.why-copy p{margin:0 0 24px;color:#d7e9f5;font-size:18px;line-height:1.65}.why-copy p:first-child{color:#f7fbff;font-size:20px;font-weight:500}.why-copy .text-link{margin-top:34px;color:#79d8f3!important}
 @media(max-width:720px){.why{display:block;padding-top:72px;padding-bottom:72px}.why-copy{margin-top:32px}.why-copy p,.why-copy p:first-child{font-size:17px}}
 
 /* Keep the “Every storm has a story” section in the markup for an exact future restore. */
