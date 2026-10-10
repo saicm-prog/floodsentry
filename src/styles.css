@@ -98,3 +98,6 @@
 html{background:#102b46}
 body{background-image:linear-gradient(rgba(16,43,70,.68),rgba(16,43,70,.74)),url('/images/topographic-contours-background-tall.png');background-color:#102b46;background-position:center top;background-size:100% auto;background-repeat:repeat-y;background-attachment:scroll}
 .hero,.intro,.atlas,.sources{background-color:transparent}
+
+/* Give the mission statement enough presence beneath the hero headline. */
+.hero-text{max-width:475px!important;color:#f7fbff!important;font-size:clamp(19px,1.6vw,22px)!important;font-weight:500;line-height:1.55!important}
