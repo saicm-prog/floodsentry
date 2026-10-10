@@ -213,7 +213,7 @@ function HomePage() {
       <section className="hero"><div>
         <p className="eyebrow"><span className="pulse" /> A field guide to severe weather</p>
         <h1>When the sky<br />gets <em>serious.</em></h1>
-        <p className="hero-text"><strong>The purpose:</strong> Flood Sentry helps people get ahead of storm risk with local forecasts and alerts—giving communities more time to prepare, protect one another, and save lives.</p>
+        <p className="hero-text"><strong>The Purpose:</strong> Flood Sentry helps people get ahead of storm risk with local forecasts and alerts—giving communities more time to prepare, protect one another, and save lives.</p>
         <div className="hero-actions"><a className="button" href="#atlas">Explore the guide <ArrowDown size={17} /></a><a className="button secondary" href="/register" onClick={handleRouteClick}>Register for alerts <ArrowUpRight size={17} /></a></div>
       </div><div className="hero-orbit" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbital-sun" /></div></section>
       <section className="intro section"><div><p className="eyebrow">The big picture</p><h2>Every storm<br />has a <em>story.</em></h2></div><p>Storms are disturbances in the atmosphere, ranging from a brief thunderstorm to a sprawling tropical cyclone. Their shapes, ingredients, and hazards are different—but understanding the basics helps us make better decisions.</p></section>
