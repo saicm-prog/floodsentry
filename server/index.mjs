@@ -1,13 +1,16 @@
 import { createServer } from 'node:http'
+import { randomBytes, scrypt as scryptCallback } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { promisify } from 'node:util'
 import { SimulatorError, simulateWeatherReport } from './weather-alerts.mjs'
 
 const port = 8787
 const databasePath = resolve('data/flood-sentry.sqlite')
 const resendApiKey = process.env.RESEND_API_KEY
 const resendFromEmail = process.env.RESEND_FROM_EMAIL
+const scrypt = promisify(scryptCallback)
 mkdirSync(dirname(databasePath), { recursive: true })
 const db = new DatabaseSync(databasePath)
 db.exec(`
@@ -23,6 +26,14 @@ db.exec(`
     zip_code TEXT NOT NULL,
     trigger_type TEXT NOT NULL,
     message TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    consented_at TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
 `)
@@ -43,6 +54,11 @@ const readBody = async request => {
 }
 const escapeHtml = value => String(value).replace(/[&<>'\"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;' }[character]))
 const safeResendDetail = value => String(value || 'Resend did not provide an error message.').replace(/[\r\n]+/g, ' ').trim().slice(0, 500)
+const hashPassword = async password => {
+  const salt = randomBytes(16).toString('hex')
+  const derivedKey = await scrypt(password, salt, 64)
+  return `scrypt$${salt}$${Buffer.from(derivedKey).toString('hex')}`
+}
 
 async function sendResendAlert({ recipients, zipCode, triggerType, message, subject }) {
   if (!resendApiKey || !resendFromEmail) return { status: 'not_configured', sent: 0, failed: 0, details: ['Resend is not configured. Add both RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.'] }
@@ -83,6 +99,16 @@ const server = createServer(async (request, response) => {
       return json(response, 201, { message: 'You are subscribed for local test alerts.' })
     }
     if (request.method === 'GET' && request.url === '/api/subscriptions') return json(response, 200, { subscriptions: db.prepare('SELECT id, email, zip_code, consented_at, created_at FROM subscriptions ORDER BY id DESC').all() })
+    if (request.method === 'POST' && request.url === '/api/accounts') {
+      const { name, email, password, consent } = await readBody(request)
+      const fullName = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : ''
+      const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+      if (!consent || fullName.length < 2 || fullName.length > 100 || !/^\S+@\S+\.\S+$/.test(normalizedEmail) || typeof password !== 'string' || password.length < 12) return json(response, 400, { error: 'Enter your full name, a valid email, a password of at least 12 characters, and accept the terms.' })
+      const now = new Date().toISOString()
+      const passwordHash = await hashPassword(password)
+      db.prepare('INSERT INTO accounts (full_name, email, password_hash, consented_at, created_at) VALUES (?, ?, ?, ?, ?)').run(fullName, normalizedEmail, passwordHash, now, now)
+      return json(response, 201, { message: 'Your local Flood Sentry account is ready.' })
+    }
     if (request.method === 'POST' && request.url === '/api/test-alert') {
       const { weatherReport } = await readBody(request)
       response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' })
@@ -97,7 +123,7 @@ const server = createServer(async (request, response) => {
     const message = error instanceof SimulatorError ? error.message : error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 'That email is already subscribed for local alerts.' : 'Local server error.'
     if (isEventStream) { streamEvent(response, { type: 'error', error: message }); return response.end() }
     if (error instanceof SimulatorError) return json(response, error.status, { error: message })
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return json(response, 409, { error: 'That email is already subscribed for local alerts.' })
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return json(response, 409, { error: request.url === '/api/accounts' ? 'An account already uses that email address.' : 'That email is already subscribed for local alerts.' })
     console.error(error); return json(response, 500, { error: 'Local server error.' })
   }
 })

@@ -21,12 +21,12 @@ const storms: Storm[] = [
   { id: 'blizzards', title: 'Blizzards', summary: 'When snow and wind erase the horizon.', detail: 'A blizzard is a winter storm with frequent wind gusts of at least 35 mph and falling or blowing snow that reduces visibility to a quarter mile or less for at least three hours.', image: 'https://images.unsplash.com/photo-1483664852095-d6cc6870702d?auto=format&fit=crop&w=1400&q=85', icon: Snowflake },
 ]
 
-function Logo() { return <a className="logo" href="/" onClick={handleRouteClick} aria-label="Flood Sentry home"><span className="logo-mark">✳</span><span>flood sentry</span></a> }
+function Logo() { return <a className="logo" href="/" onClick={handleRouteClick} aria-label="Flood Sentry home"><span className="logo-mark">✳</span><span className="logo-wordmark"><span className="logo-flood">Flood</span><span className="logo-sentry">Sentry</span></span></a> }
 
 function Header() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/simulate" onClick={event => { close(); handleRouteClick(event) }}>Simulate event</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
+  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/account" onClick={event => { close(); handleRouteClick(event) }}>Account</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/simulate" onClick={event => { close(); handleRouteClick(event) }}>Simulate event</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
 }
 
 function Card({ storm }: { storm: Storm }) {
@@ -52,6 +52,25 @@ function SubscribeForm() {
 
 function RegisterPage() {
   return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local preview / email alerts</p><h1>Stay ahead<br /><em>of the weather.</em></h1><p>Register by ZIP code for local alerts. Your registration is stored on this computer, and matching simulated events can send email through the configured Resend account.</p></section><section className="register-card"><SubscribeForm /></section></main><Footer /></>
+}
+
+function AccountPage() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [consent, setConsent] = useState(false)
+  const [status, setStatus] = useState('')
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setStatus('Creating your local account…')
+    try {
+      const response = await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password, consent }) })
+      const result = await response.json()
+      setStatus(result.message || result.error || 'The account could not be created.')
+      if (response.ok) { setName(''); setEmail(''); setPassword(''); setConsent(false) }
+    } catch { setStatus('Start the local API with npm run dev:api first.') }
+  }
+  return <><Header /><main className="page-shell account-page"><section className="page-intro"><h1>Set up your<br /><em>Flood Sentry account.</em></h1><p>Save your account details and stay ready for local storm risk.</p></section><section className="account-card"><h2>Account details</h2><form onSubmit={submit} className="registration-form account-form"><label>Full name<input type="text" autoComplete="name" value={name} onChange={event => setName(event.target.value)} placeholder="Your full name" required /></label><label>Email address<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" required /></label><label>Password<input type="password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Create a password" minLength={12} required /></label><label className="consent"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} required /> I agree to save my information to create a local Flood Sentry account.</label><button className="button" type="submit">Create account <ArrowUpRight size={17} /></button>{status && <p className="form-status" role="status">{status}</p>}</form><p className="account-note">Account sign-in is not included in this local prototype yet.</p></section></main><Footer /></>
 }
 
 function ErrorModal({ title = 'The event could not finish cleanly.', message, onClose }: { title?: string; message: string; onClose: () => void }) {
@@ -249,7 +268,7 @@ function App() {
     window.addEventListener('popstate', handlePopState)
     return () => { window.removeEventListener('flood-sentry:navigate', navigate); window.removeEventListener('popstate', handlePopState) }
   }, [])
-  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/simulate' ? <SimulatorPage /> : <HomePage />
+  const page = path === '/account' ? <AccountPage /> : path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/simulate' ? <SimulatorPage /> : <HomePage />
   return <div className={`route-frame route-${transition}`} key={path}>{page}</div>
 }
 
