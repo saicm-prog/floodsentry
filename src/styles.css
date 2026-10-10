@@ -41,9 +41,9 @@
 .hero{margin-left:auto;margin-right:auto;padding-left:40px;padding-right:40px}.intro,.atlas,.tools-section,.safety,.sources{border-top:1px dotted rgba(247,251,255,.6)}
 @media(max-width:720px){.hero{padding-left:22px;padding-right:22px}}
 
-/* Keep the hero's original guide label and use a consistent placeholder label everywhere else. */
+/* Keep the hero's original guide label; retain the other original labels in markup for a future restore, but do not display them now. */
 .eyebrow:not(.hero .eyebrow){font-size:0;color:transparent}
-.eyebrow:not(.hero .eyebrow)::after{content:'placeholder';font:11px 'DM Sans',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#899eaa}
+.eyebrow:not(.hero .eyebrow)::after{content:none}
 .hero .eyebrow{font-size:11px;color:#73899a}
 .hero .eyebrow::after{content:none}
 
