@@ -26,7 +26,7 @@ function Logo() { return <a className="logo" href="/" onClick={handleRouteClick}
 function Header() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/account" onClick={event => { close(); handleRouteClick(event) }}>Account</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/simulate" onClick={event => { close(); handleRouteClick(event) }}>Simulate event</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
+  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/simulate" onClick={event => { close(); handleRouteClick(event) }}>Simulate event</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
 }
 
 function Card({ storm }: { storm: Storm }) {
@@ -268,7 +268,8 @@ function App() {
     window.addEventListener('popstate', handlePopState)
     return () => { window.removeEventListener('flood-sentry:navigate', navigate); window.removeEventListener('popstate', handlePopState) }
   }, [])
-  const page = path === '/account' ? <AccountPage /> : path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/simulate' ? <SimulatorPage /> : <HomePage />
+  // AccountPage and its local API are intentionally retained but hidden until the account experience is ready to return.
+  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/simulate' ? <SimulatorPage /> : <HomePage />
   return <div className={`route-frame route-${transition}`} key={path}>{page}</div>
 }
 
