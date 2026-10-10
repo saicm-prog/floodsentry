@@ -101,3 +101,9 @@ body{background-image:linear-gradient(rgba(16,43,70,.68),rgba(16,43,70,.74)),url
 
 /* Give the mission statement enough presence beneath the hero headline. */
 .hero-text{max-width:510px!important;margin:34px 0!important;padding:18px 20px!important;border-left:5px solid #5cc9ed;background:rgba(92,201,237,.14);color:#f7fbff!important;font-size:clamp(21px,1.9vw,25px)!important;font-weight:600;line-height:1.42!important;letter-spacing:-.025em}
+
+/* Why Flood Sentry: a focused mission section rooted in the need for earlier action. */
+.why{display:grid;grid-template-columns:1fr 1.6fr;gap:80px;padding-top:96px;padding-bottom:96px;border-top:2px dotted rgba(247,251,255,.6)}
+.why h2{font-size:clamp(48px,5vw,70px);line-height:.98;letter-spacing:-.065em}
+.why-copy{max-width:650px}.why-copy p{margin:0 0 24px;color:#d7e9f5;font-size:18px;line-height:1.65}.why-copy p:first-child{color:#f7fbff;font-size:20px;font-weight:500}.why-copy .text-link{margin-top:34px}
+@media(max-width:720px){.why{display:block;padding-top:72px;padding-bottom:72px}.why-copy{margin-top:32px}.why-copy p,.why-copy p:first-child{font-size:17px}}
