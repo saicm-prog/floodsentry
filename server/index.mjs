@@ -88,7 +88,7 @@ const providedBulletinEmail = ({ triggerType, message, analysis }) => {
       <tr><td style="padding:21px 34px;background:#102b46;color:#c9e8f2;font-size:12px;line-height:1.55;">Flood Sentry helps make weather information easier to understand. This summary is based on a bulletin provided to Flood Sentry and does not replace official emergency instructions.</td></tr>
     </table>
   </td></tr></table>
-</body></html>`
+</body></html>`.replaceAll('✳', '*').replace('color:#ffffff;font-size:23px', 'color:#f7fbff!important;font-size:23px').replace('color:#5cc9ed;">Sentry', 'color:#5cc9ed!important;">Sentry')
 }
 const hashPassword = async password => {
   const salt = randomBytes(16).toString('hex')
