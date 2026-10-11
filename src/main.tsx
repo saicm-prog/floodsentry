@@ -6,6 +6,7 @@ import './styles.css'
 type Storm = { id: string; title: string; summary: string; detail: string; image: string; icon: typeof Wind }
 type Notification = { id: number; zip_code: string; trigger_type: string; message: string; created_at: string }
 type Registration = { id: number; email: string; zip_code: string; consented_at: string; created_at: string }
+type BulletinError = { id: number; stage: string; message: string; created_at: string }
 
 function handleRouteClick(event: MouseEvent<HTMLAnchorElement>) {
   const href = event.currentTarget.getAttribute('href')
@@ -26,7 +27,7 @@ function Logo() { return <a className="logo" href="/" onClick={handleRouteClick}
 function Header() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/bulletin" onClick={event => { close(); handleRouteClick(event) }}>Provide Bulletin</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
+  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/bulletin" onClick={event => { close(); handleRouteClick(event) }}>Provide Bulletin</a><a href="/errors" onClick={event => { close(); handleRouteClick(event) }}>Errors</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
 }
 
 function Card({ storm }: { storm: Storm }) {
@@ -96,6 +97,22 @@ function RegistrationsPage() {
   }
   useEffect(() => { void loadRegistrations() }, [])
   return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local-only subscriber directory</p><h1>Current<br /><em>registrations.</em></h1><p>Review the people registered for local alerts. This page reads from the SQLite database on this computer and is not protected by login.</p></section><section className="registrations-card"><div className="registrations-heading"><p className="eyebrow">{registrations.length} registered subscriber{registrations.length === 1 ? '' : 's'}</p><button className="button small-button" type="button" onClick={() => void loadRegistrations()}>Refresh</button></div>{status ? <p className="form-status" role="status">{status}</p> : registrations.length === 0 ? <p className="empty-state">No users have registered yet.</p> : <div className="registration-table-wrap"><table className="registration-table"><thead><tr><th>Email</th><th>ZIP code</th><th>Consented</th><th>Registered</th></tr></thead><tbody>{registrations.map(registration => <tr key={registration.id}><td>{registration.email}</td><td>{registration.zip_code}</td><td>{new Date(registration.consented_at).toLocaleString()}</td><td>{new Date(registration.created_at).toLocaleString()}</td></tr>)}</tbody></table></div>}</section></main><Footer /></>
+}
+
+function ErrorsPage() {
+  const [errors, setErrors] = useState<BulletinError[]>([])
+  const [status, setStatus] = useState('Loading error history…')
+  const loadErrors = async () => {
+    try {
+      const response = await fetch('/api/errors')
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error)
+      setErrors(result.errors || [])
+      setStatus('')
+    } catch { setStatus('The error history could not be loaded. Please check the local API.') }
+  }
+  useEffect(() => { void loadErrors() }, [])
+  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local diagnostic history</p><h1>Bulletin<br /><em>errors.</em></h1><p>Review errors saved from processing weather bulletins and sending email. New entries are retained locally so they remain available after you leave this page.</p></section><section className="registrations-card errors-card"><div className="registrations-heading"><p className="eyebrow">{errors.length} saved error{errors.length === 1 ? '' : 's'}</p><button className="button small-button" type="button" onClick={() => void loadErrors()}>Refresh</button></div>{status ? <p className="form-status" role="status">{status}</p> : errors.length === 0 ? <p className="empty-state">No bulletin errors have been saved yet.</p> : <div className="error-list">{errors.map(error => <article key={error.id}><div><strong>{error.stage}</strong><time dateTime={error.created_at}>{new Date(error.created_at).toLocaleString()}</time></div><p>{error.message}</p></article>)}</div>}</section></main><Footer /></>
 }
 
 type WeatherAnalysis = {
@@ -316,7 +333,7 @@ function App() {
     return () => { window.removeEventListener('flood-sentry:navigate', navigate); window.removeEventListener('popstate', handlePopState) }
   }, [])
   // AccountPage and its local API are intentionally retained but hidden until the account experience is ready to return.
-  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/bulletin' || path === '/simulate' ? <SimulatorPage /> : <HomePage />
+  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/errors' ? <ErrorsPage /> : path === '/bulletin' || path === '/simulate' ? <SimulatorPage /> : <HomePage />
   return <div className={`route-frame route-${transition}`} key={path}>{page}</div>
 }
 

@@ -36,6 +36,12 @@ db.exec(`
     consented_at TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS bulletin_errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stage TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
 `)
 
 const json = (response, status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); response.end(JSON.stringify(body)) }
@@ -56,6 +62,11 @@ const readBody = async request => {
 }
 const escapeHtml = value => String(value).replace(/[&<>'\"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;' }[character]))
 const safeResendDetail = value => String(value || 'Resend did not provide an error message.').replace(/[\r\n]+/g, ' ').trim().slice(0, 500)
+const recordBulletinError = (stage, message) => {
+  try {
+    db.prepare('INSERT INTO bulletin_errors (stage, message, created_at) VALUES (?, ?, ?)').run(String(stage || 'Unknown stage').slice(0, 160), safeResendDetail(message), new Date().toISOString())
+  } catch (error) { console.error('Could not save bulletin error', error) }
+}
 const emailParagraphs = value => escapeHtml(value).split(/\n{2,}/).filter(Boolean).map(paragraph => `<p style="margin:0 0 16px;color:#29465c;font-size:16px;line-height:1.65;">${paragraph.replace(/\n/g, '<br>')}</p>`).join('')
 const emailDetail = (label, value) => `<tr><td style="padding:14px 0;border-bottom:1px solid #d7e8ef;"><span style="display:block;margin-bottom:4px;color:#5b7384;font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;">${escapeHtml(label)}</span><span style="color:#102b46;font-size:15px;line-height:1.45;">${escapeHtml(value || 'Not specified')}</span></td></tr>`
 const floodSentryEmail = ({ triggerType, message, analysis }) => {
@@ -115,6 +126,7 @@ async function sendResendAlert({ recipients, zipCode, triggerType, message, subj
 const server = createServer(async (request, response) => {
   let isEventStream = false
   let progressHeartbeat
+  let errorStage = 'Request setup'
   if (request.method === 'OPTIONS') { response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' }); return response.end() }
   try {
     if (request.method === 'POST' && request.url === '/api/subscriptions') {
@@ -150,6 +162,7 @@ const server = createServer(async (request, response) => {
       let currentStage = { id: 'starting', label: 'Preparing the weather report' }
       const publishStage = stage => {
         currentStage = stage
+        errorStage = stage.label
         streamEvent(response, { type: 'stage', stage })
       }
       // Slow searches and delivery requests can take tens of seconds. Heartbeats
@@ -158,14 +171,17 @@ const server = createServer(async (request, response) => {
       progressHeartbeat = setInterval(() => streamEvent(response, { type: 'heartbeat', stage: currentStage }), 2500)
       const result = await simulateWeatherReport(weatherReport, { db, sendAlert: sendResendAlert, onStage: publishStage })
       clearInterval(progressHeartbeat)
+      if (result.email.status !== 'sent') recordBulletinError('Email delivery', result.email.details?.join(' ') || `Email delivery ended with status: ${result.email.status}.`)
       streamEvent(response, { type: 'complete', result })
       return response.end()
     }
     if (request.method === 'GET' && request.url === '/api/notifications') return json(response, 200, { notifications: db.prepare('SELECT * FROM notifications ORDER BY id DESC LIMIT 20').all() })
+    if (request.method === 'GET' && request.url === '/api/errors') return json(response, 200, { errors: db.prepare('SELECT * FROM bulletin_errors ORDER BY id DESC LIMIT 50').all() })
     return json(response, 404, { error: 'Not found' })
   } catch (error) {
     clearInterval(progressHeartbeat)
     const message = error instanceof SimulatorError ? error.message : error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 'That email is already subscribed for local alerts.' : 'Local server error.'
+    if (request.method === 'POST' && (request.url === '/api/weather-bulletins' || request.url === '/api/test-alert')) recordBulletinError(errorStage, message)
     if (isEventStream) { streamEvent(response, { type: 'error', error: message }); return response.end() }
     if (error instanceof SimulatorError) return json(response, error.status, { error: message })
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return json(response, 409, { error: request.url === '/api/accounts' ? 'An account already uses that email address.' : 'That email is already subscribed for local alerts.' })
