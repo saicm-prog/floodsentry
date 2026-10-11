@@ -242,7 +242,10 @@ function SimulatorPage() {
         const skipped = step.id === 'verification' && activeStepIndex > index && !completedStepIds.has(step.id)
         const complete = completedStepIds.has(step.id) && step.id !== activeStage.id
         const current = step.id === activeStage.id
-        return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(activeStepElapsed)}` : complete ? 'Completed' : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
+        const completedStageIndex = stages.findIndex(stage => stage.id === step.id)
+        const completedAt = completedStageIndex === -1 ? null : stages[completedStageIndex + 1]
+        const completedDuration = completedAt && completedStageIndex !== -1 ? Math.max(0, completedAt.receivedAt - stages[completedStageIndex].receivedAt) : 0
+        return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(activeStepElapsed)}` : complete ? `Completed in ${formatElapsed(completedDuration)}` : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
       })}</ol>
     </section>}
     {analysis && <section className="notifications-card weather-results" aria-label="Bulletin results">
