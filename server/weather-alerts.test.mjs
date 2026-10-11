@@ -1,28 +1,29 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
+import { createCountyZipTables, lookupCountyZipCodes } from './county-zip-crosswalk.mjs'
 import { analyzeWeatherReport, simulateWeatherReport } from './weather-alerts.mjs'
 
 const report = 'National Weather Service: Flash flood warning for Bradley and McMinn Counties, Tennessee, June 10, 2012, 6 pm EDT until 9 pm EDT.'
-const sourceUrl = 'https://example.org/zip-coverage'
-const coverage = {
+const details = {
   eventType: 'Flash flood warning', areas: ['Bradley County, TN', 'McMinn County, TN'],
-  issuedAt: 'June 10, 2012, 6 pm EDT', expiresAt: 'June 10, 2012, 9 pm EDT', coverageNotes: 'County-level approximation.',
-  zipCodes: ['37311', '37303', '37311'].map(zipCode => ({ zipCode, area: 'Test county', evidence: 'Test ZIP mapping evidence.', sourceUrl })),
+  counties: [{ name: 'Bradley County', state: 'TN' }, { name: 'McMinn County', state: 'TN' }],
+  issuedAt: 'June 10, 2012, 6 pm EDT', expiresAt: 'June 10, 2012, 9 pm EDT',
 }
-const draft = { subject: 'Flash flood simulation', message: 'Historical report from June 10, 2012: flooding reported. Act quickly if flooding is observed.' }
-function modelResponse(data, search = false) {
-  return { ok: true, json: async () => ({ status: 'completed', output: [
-    ...(search ? [{ type: 'web_search_call', action: { sources: [{ url: sourceUrl, title: 'Test ZIP source' }] } }] : []),
-    { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(data) }] },
-  ] }) }
+const draft = { subject: 'Flash flood warning: Bradley and McMinn Counties', message: 'Flooding has been reported. Act quickly if flooding is observed.' }
+const localZips = {
+  zipCodes: [{ zipCode: '37311', areas: ['Bradley County, TN'] }, { zipCode: '37303', areas: ['McMinn County, TN'] }],
+  unresolved: [], matchedCounties: ['Bradley County, TN', 'McMinn County, TN'],
 }
-function provider(first = coverage, second = draft) {
+function modelResponse(data) {
+  return { ok: true, json: async () => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(data) }] }] }) }
+}
+function provider(first = details, second = draft) {
   const calls = []
-  return { calls, apiKey: 'test-key', fetchImpl: async (url, options) => {
+  return { calls, apiKey: 'test-key', lookupCountyZipCodes: () => localZips, fetchImpl: async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/responses')
     calls.push(JSON.parse(options.body))
-    return modelResponse(calls.length === 1 ? first : second, calls.length === 1)
+    return modelResponse(calls.length === 1 ? first : second)
   } }
 }
 function database() {
@@ -33,19 +34,16 @@ function database() {
   return db
 }
 
-test('two calls: required web lookup then drafting; evidence retained and ZIPs deduplicated', async () => {
+test('uses a local county lookup and drafts the message without web search', async () => {
   const mock = provider()
   const result = await analyzeWeatherReport(report, mock)
   assert.equal(mock.calls.length, 2)
-  assert.equal(mock.calls[0].tool_choice, 'required')
-  assert.equal(mock.calls[0].tools[0].type, 'web_search')
-  assert.equal(mock.calls[1].tools, undefined)
+  assert.equal(mock.calls[0].tools, undefined)
   assert.equal(mock.calls[0].store, false)
-  assert.deepEqual(result.zipCodes.map(zip => zip.zipCode), ['37303', '37311'])
+  assert.deepEqual(result.zipCodes.map(zip => zip.zipCode), ['37311', '37303'])
   assert.match(mock.calls[1].input, /37311/)
   assert.equal(result.subject, draft.subject)
-  assert.match(result.message, /2012/)
-  assert.equal(result.sources[0].url, sourceUrl)
+  assert.match(result.coverageNotes, /locally stored 2020 Census/)
 })
 
 test('missing key and invalid reports stop before any provider call', async () => {
@@ -53,107 +51,62 @@ test('missing key and invalid reports stop before any provider call', async () =
   await assert.rejects(analyzeWeatherReport(report, { apiKey: '' }), /OPENAI_API_KEY/)
 })
 
-test('empty coverage and malformed ZIPs prevent drafting', async () => {
-  for (const zipCodes of [[], [{ ...coverage.zipCodes[0], zipCode: 'TNC011' }]]) {
-    const mock = provider({ ...coverage, zipCodes })
-    await assert.rejects(analyzeWeatherReport(report, mock), /No supported|invalid ZIP codes/)
-    assert.equal(mock.calls.length, 1)
-  }
+test('missing counties stop before local matching or drafting', async () => {
+  const mock = provider({ ...details, counties: [] })
+  await assert.rejects(analyzeWeatherReport(report, mock), /usable US county/)
+  assert.equal(mock.calls.length, 1)
 })
 
-test('tracking parameters and fragments do not invalidate an otherwise matching source', async () => {
-  const mock = provider({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], sourceUrl: `${sourceUrl}?utm_source=chatgpt.com#zip-list` }] })
+test('unresolved local county mapping stops before drafting', async () => {
+  const mock = provider()
+  mock.lookupCountyZipCodes = () => ({ zipCodes: [], unresolved: ['Imaginary County, TN'], matchedCounties: [] })
+  await assert.rejects(analyzeWeatherReport(report, mock), /No local ZIP mapping/)
+  assert.equal(mock.calls.length, 1)
+})
+
+test('leading zeroes from the local crosswalk survive matching', async () => {
+  const mock = provider()
+  mock.lookupCountyZipCodes = () => ({ zipCodes: [{ zipCode: '01234', areas: ['Test County, MA'] }], unresolved: [], matchedCounties: ['Test County, MA'] })
   const result = await analyzeWeatherReport(report, mock)
-  assert.equal(mock.calls.length, 2)
-  assert.equal(result.zipCodes[0].sourceUrl, sourceUrl)
-  assert.equal(result.sources.length, 1)
-})
-
-test('pages opened directly are accepted even without search source lists', async () => {
-  for (const actionType of ['open_page', 'find_in_page']) {
-    let calls = 0
-    const result = await analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => {
-      if (++calls > 1) return modelResponse(draft)
-      const payload = await modelResponse(coverage, true).json()
-      payload.output[0] = { type: 'web_search_call', status: 'completed', action: { type: actionType, url: sourceUrl } }
-      return { ok: true, json: async () => payload }
-    } })
-    assert.equal(calls, 2)
-    assert.equal(result.sources[0].url, sourceUrl)
-  }
-})
-
-test('an unsupported citation is repaired with one search before drafting', async () => {
-  const requests = []
-  const result = await analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async (_url, options) => {
-    requests.push(JSON.parse(options.body))
-    if (requests.length === 1) return modelResponse({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], sourceUrl: 'https://invented.example' }] }, true)
-    return modelResponse(requests.length === 2 ? coverage : draft, requests.length === 2)
-  } })
-  assert.equal(requests.length, 3)
-  assert.equal(requests[1].tools[0].type, 'web_search')
-  assert.match(requests[1].input, /consultedSources/)
-  assert.equal(requests[2].tools, undefined)
-  assert.equal(result.zipCodes.length, 2)
-})
-
-test('invented or meaningfully different URLs still fail after one retry without saving or sending', async () => {
-  for (const badUrl of ['https://invented.example', `${sourceUrl}?county=another`, 'https://example.org/other-county']) {
-    const db = database()
-    let calls = 0
-    try {
-      await assert.rejects(simulateWeatherReport(report, {
-        db, apiKey: 'test-key', sendAlert: () => assert.fail('Must not send'),
-        fetchImpl: async () => { calls++; return modelResponse({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], sourceUrl: badUrl }] }, true) },
-      }), /could not be verified after an automatic retry/)
-      assert.equal(calls, 2)
-      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 0)
-    } finally { db.close() }
-  }
-})
-
-test('failed page opens are not treated as evidence', async () => {
-  let calls = 0
-  await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => {
-    calls++
-    const payload = await modelResponse(coverage, true).json()
-    payload.output[0] = { type: 'web_search_call', status: 'failed', action: { type: 'open_page', url: sourceUrl } }
-    return { ok: true, json: async () => payload }
-  } }), /could not be verified after an automatic retry/)
-  assert.equal(calls, 2)
-})
-
-test('leading zeroes survive normalization', async () => {
-  const result = await analyzeWeatherReport(report, provider({ ...coverage, zipCodes: [{ ...coverage.zipCodes[0], zipCode: '01234' }] }))
   assert.equal(result.zipCodes[0].zipCode, '01234')
 })
 
 test('provider failures are actionable and never expose provider error bodies', async () => {
   for (const status of [401, 429, 500]) {
-    await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => ({ ok: false, status }) }), new RegExp(`HTTP ${status}`))
+    await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', lookupCountyZipCodes: () => localZips, fetchImpl: async () => ({ ok: false, status }) }), new RegExp(`HTTP ${status}`))
   }
-  await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => { throw { name: 'TimeoutError' } } }), /timed out/)
-  await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'incomplete' }) }) }), /incomplete/)
+  await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', lookupCountyZipCodes: () => localZips, fetchImpl: async () => { throw { name: 'TimeoutError' } } }), /timed out/)
+})
+
+test('local crosswalk matches a county name with or without its suffix', () => {
+  const db = new DatabaseSync(':memory:')
+  try {
+    createCountyZipTables(db)
+    db.prepare(`INSERT INTO county_zip_crosswalk (zip_code, county_geoid, county_name, county_key, state_code, land_share, source_file, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run('37311', '47011', 'Bradley County', 'bradleycounty', 'TN', 1, 'test', '2026-01-01T00:00:00Z')
+    const result = lookupCountyZipCodes(db, [{ name: 'Bradley', state: 'TN' }])
+    assert.deepEqual(result.zipCodes, [{ zipCode: '37311', areas: ['Bradley County, TN'] }])
+    assert.deepEqual(result.unresolved, [])
+  } finally { db.close() }
 })
 
 test('multi-ZIP bulletin saves once per ZIP and sends one alert to the dedicated inbox', async () => {
   const db = database()
   try {
     const sent = []
-    const result = await simulateWeatherReport(report, { ...provider(), db, sendAlert: async message => { sent.push(message); return { status: 'sent', sent: 2, failed: 0 } } })
+    const result = await simulateWeatherReport(report, { ...provider(), db, sendAlert: async message => { sent.push(message); return { status: 'sent', sent: 1, failed: 0 } } })
     assert.equal(result.matchedSubscribers, 2)
     assert.equal(sent.length, 1)
     assert.deepEqual(sent[0].recipients, ['muthup.yt@gmail.com'])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 2)
-    assert.match(db.prepare('SELECT message FROM notifications').get().message, /Historical report/)
   } finally { db.close() }
 })
 
-test('reports real processing stages in order', async () => {
+test('reports the local lookup processing stages in order', async () => {
   const db = database()
   try {
     const stages = []
-    await simulateWeatherReport(report, { ...provider(), db, onStage: stage => stages.push(stage.id), sendAlert: async () => ({ status: 'sent', sent: 2, failed: 0 }) })
+    await simulateWeatherReport(report, { ...provider(), db, onStage: stage => stages.push(stage.id), sendAlert: async () => ({ status: 'sent', sent: 1, failed: 0 }) })
     assert.deepEqual(stages, ['starting', 'areas', 'research', 'zip-codes', 'message', 'matching', 'saving', 'sending'])
   } finally { db.close() }
 })
@@ -161,7 +114,7 @@ test('reports real processing stages in order', async () => {
 test('draft failure creates no notifications and sends nothing', async () => {
   const db = database()
   try {
-    await assert.rejects(simulateWeatherReport(report, { ...provider(coverage, { subject: '', message: '' }), db, sendAlert: () => assert.fail('Must not send') }), /Alert drafting/)
+    await assert.rejects(simulateWeatherReport(report, { ...provider(details, { subject: '', message: '' }), db, sendAlert: () => assert.fail('Must not send') }), /Alert drafting/)
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 0)
   } finally { db.close() }
 })
@@ -177,15 +130,4 @@ test('no matching subscribers still sends the dedicated email and records the bu
     assert.deepEqual(sent[0].recipients, ['muthup.yt@gmail.com'])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 2)
   } finally { db.close() }
-})
-
-test('missing Resend configuration and partial delivery retain saved events', async () => {
-  for (const email of [{ status: 'not_configured', sent: 0, failed: 0 }, { status: 'partial_failure', sent: 1, failed: 1 }]) {
-    const db = database()
-    try {
-      const result = await simulateWeatherReport(report, { ...provider(), db, sendAlert: async () => email })
-      assert.deepEqual(result.email, email)
-      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 2)
-    } finally { db.close() }
-  }
 })

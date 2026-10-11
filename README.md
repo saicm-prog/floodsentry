@@ -16,7 +16,7 @@ The production output is generated in `dist/`. Configure the hosting provider to
 
 ## Resend local alerts
 
-The simulator records every event locally and sends matching ZIP-code alerts through Resend when the API is configured. Copy `.env.example` to `.env`, then set:
+The bulletin workflow records every event locally and sends matching ZIP-code alerts through Resend when the API is configured. Copy `.env.example` to `.env`, then set:
 
 ```bash
 RESEND_API_KEY=re_...
@@ -38,14 +38,14 @@ Restart `npm run dev:api` after changing `.env`, or use `npm run dev:all` to sta
 
 The `/simulate` page has one multiline weather-report input, prefilled with the June 10, 2012 Tennessee example. Submitting sends `POST /api/test-alert` with `{ "weatherReport": "..." }`:
 
-1. The server calls OpenAI Responses with required web search and structured output to identify the affected areas and their ZIP codes, including lookup evidence and source links.
+1. One local Census crosswalk download maps counties to ZIP Code Tabulation Areas (ZCTAs). The server calls OpenAI Responses with structured output only to identify the affected counties/areas and draft the resident message; it does not make ZIP lookup web searches for each bulletin.
 2. A separate model request uses the report and coverage to draft the resident email. No subscriber emails or database records are sent to OpenAI.
 3. The server records one local notification per distinct ZIP, matches subscriptions across all those ZIPs, and sends each matching email one TEST message through Resend. The page shows coverage, citations, message, subscriber count, and delivery results.
 
-All simulated messages are explicitly marked TEST and retain report dates. County-to-ZIP lookup is approximate and can miss ZIPs or include areas outside a warning polygon; it is not a precise geospatial alerting system. NWS county codes are never treated as ZIP codes. Unsupported ZIPs or failed model calls stop processing before any records or emails are created. Missing Resend settings or delivery failures leave the local event saved and show a dismissible error. Re-running a report creates a new event and may send the emails again.
+County-to-ZIP lookup is approximate and can miss ZIPs or include areas outside a warning polygon; it is not a precise geospatial alerting system. Census ZCTAs approximate USPS ZIP delivery areas and can cross county lines. NWS county codes are never treated as ZIP codes. Unsupported ZIPs or failed model calls stop processing before any records or emails are created. Missing Resend settings or delivery failures leave the local event saved and show a dismissible error. Re-running a report creates a new event and may send the emails again.
 
-Each run normally uses two paid OpenAI requests plus web search. If ZIP citations cannot be matched to consulted sources, one additional search request repairs the lookup before drafting. Source matching recognizes direct page opens, fragments, and tracking parameters while preserving meaningful URL differences. If evidence still cannot be verified, nothing is saved or emailed. The default model is configurable and must support Responses, web search, and structured outputs. API key, access, quota, lookup and drafting errors appear in the existing error modal. Tests use mock providers and an in-memory SQLite database; they do not send real emails or incur API charges.
+Run `npm run data:download` to refresh the locally stored Census crosswalk. Each bulletin normally uses two paid OpenAI requests (county extraction and drafting) with no runtime ZIP lookup search. The default model is configurable and must support Responses and structured outputs. API key, access, quota, local mapping, and drafting errors appear in the Errors page. Tests use mock providers and an in-memory SQLite database; they do not send real emails or incur API charges.
 
 The Node API must remain running for simulation and registration. Deploying only the static frontend does not deploy this local API.
 
-Implementation references: [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search) and [structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+Implementation references: [2020 Census ZCTA-to-county relationship files](https://www.census.gov/geographies/reference-files/2020/geo/relationship-files.html) and [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs).

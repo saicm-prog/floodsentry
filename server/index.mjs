@@ -5,9 +5,11 @@ import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { promisify } from 'node:util'
 import { SimulatorError, simulateWeatherReport } from './weather-alerts.mjs'
+import { ensureCountyZipCrosswalk } from './county-zip-crosswalk.mjs'
 
 const port = 8787
 const databasePath = resolve('data/flood-sentry.sqlite')
+const crosswalkPath = resolve('data/tab20_zcta520_county20_natl.txt')
 const resendApiKey = process.env.RESEND_API_KEY
 const resendFromEmail = process.env.RESEND_FROM_EMAIL
 const scrypt = promisify(scryptCallback)
@@ -43,6 +45,8 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `)
+const crosswalk = ensureCountyZipCrosswalk(db, crosswalkPath)
+console.log(`Local county-to-ZIP crosswalk ready (${crosswalk.rows.toLocaleString()} relationships${crosswalk.imported ? ', imported now' : ''}).`)
 
 const json = (response, status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); response.end(JSON.stringify(body)) }
 // Keep progress messages small and immediately flushable so a browser can update
