@@ -165,6 +165,8 @@ function SimulatorPage() {
   const [historyError, setHistoryError] = useState('')
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [bulletinTiming, setBulletinTiming] = useState<BulletinTiming | null>(null)
+  const [progressFinished, setProgressFinished] = useState(false)
+  const [progressFinishedAt, setProgressFinishedAt] = useState<number | null>(null)
   const simulationStartedAt = useRef<number | null>(null)
   const lastProcessedBulletin = useRef('')
 
@@ -195,7 +197,7 @@ function SimulatorPage() {
     event.preventDefault()
     if (busy) return
     simulationStartedAt.current = Date.now()
-    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }]); setAnalysis(null); setDelivery(null); setError(null); setStatus('')
+    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }]); setProgressFinished(false); setProgressFinishedAt(null); setAnalysis(null); setDelivery(null); setError(null); setStatus('')
     let finalResult: SimulationResult | undefined
     try {
       const response = await fetch('/api/weather-bulletins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
@@ -205,6 +207,9 @@ function SimulatorPage() {
         if (update.type === 'complete' && update.result) finalResult = update.result
       })
       if (!finalResult) throw new Error('The simulator finished without a result.')
+      const completedAt = Math.floor((Date.now() - (simulationStartedAt.current || Date.now())) / 1000)
+      setProgressFinishedAt(completedAt)
+      setProgressFinished(true)
       setAnalysis(finalResult.analysis)
       setBulletinTiming({ issuedAt: finalResult.analysis.issuedAt, expiresAt: finalResult.analysis.expiresAt })
       lastProcessedBulletin.current = weatherReport.trim()
@@ -222,6 +227,7 @@ function SimulatorPage() {
   const activeStepIndex = simulationSteps.findIndex(step => step.id === activeStage.id)
   const completedStepIds = new Set(stages.map(stage => stage.id))
   const activeStepElapsed = Math.max(0, elapsedSeconds - activeStage.receivedAt)
+  const displayedStepElapsed = progressFinished && progressFinishedAt !== null ? Math.max(0, progressFinishedAt - activeStage.receivedAt) : activeStepElapsed
   return <><Header /><main className="page-shell">
     <section className="page-intro"><p className="eyebrow">Weather bulletin</p><h1>Provide a weather<br /><em>bulletin.</em></h1><p>Paste a weather bulletin to identify affected ZIP codes and prepare a clear alert. Each bulletin sends one email to the delivery inbox; subscriber matches are shown for reference only.</p></section>
     <section className="simulator-card weather-report-card">
@@ -234,17 +240,18 @@ function SimulatorPage() {
       </form>
     </section>
     {bulletinTiming && <section className="bulletin-timing" aria-label="Most recent bulletin timing"><p>Most recent bulletin timing</p><div><span>Issued</span><strong>{bulletinTiming.issuedAt}</strong></div><div><span>Expires</span><strong>{bulletinTiming.expiresAt}</strong></div></section>}
-    {busy && <section className="simulation-progress" aria-live="polite" aria-label="Bulletin processing progress">
-      <div><p className="eyebrow">Live processing</p><h2>Working through<br />the <em>report.</em></h2></div>
-      <div className="elapsed-time"><span>Time in this step</span><strong>{formatElapsed(activeStepElapsed)}</strong><small><i aria-hidden="true" /> Live connection active</small></div>
+    {stages.length > 0 && <section className="simulation-progress" aria-live="polite" aria-label="Bulletin processing progress">
+      <div><p className="eyebrow">{progressFinished ? 'Processing complete' : 'Live processing'}</p><h2>{progressFinished ? <>Bulletin<br /><em>processed.</em></> : <>Working through<br />the <em>report.</em></>}</h2></div>
+      <div className="elapsed-time"><span>{progressFinished ? 'Final step time' : 'Time in this step'}</span><strong>{formatElapsed(displayedStepElapsed)}</strong>{busy ? <small><i aria-hidden="true" /> Live connection active</small> : <small>Saved until the next bulletin</small>}</div>
       <div className="progress-now"><span className="progress-kicker">Now working on</span><strong>{activeStage.label}</strong><p>{stageDetail(activeStage)}</p><div className="progress-track" aria-hidden="true"><span style={{ width: `${Math.max(8, ((Math.max(activeStepIndex, 0) + 1) / simulationSteps.length) * 100)}%` }} /></div><small>Updates appear as each task completes. Source research can take a little while.</small></div>
       <ol className="progress-steps">{simulationSteps.map((step, index) => {
         const skipped = step.id === 'verification' && activeStepIndex > index && !completedStepIds.has(step.id)
-        const complete = completedStepIds.has(step.id) && step.id !== activeStage.id
-        const current = step.id === activeStage.id
+        const current = busy && step.id === activeStage.id
+        const complete = completedStepIds.has(step.id) && !current
         const completedStageIndex = stages.findIndex(stage => stage.id === step.id)
-        const completedAt = completedStageIndex === -1 ? null : stages[completedStageIndex + 1]
-        const completedDuration = completedAt && completedStageIndex !== -1 ? Math.max(0, completedAt.receivedAt - stages[completedStageIndex].receivedAt) : 0
+        const nextStage = completedStageIndex === -1 ? null : stages[completedStageIndex + 1]
+        const completedAt = nextStage?.receivedAt ?? (progressFinished ? progressFinishedAt : null)
+        const completedDuration = completedAt !== null && completedStageIndex !== -1 ? Math.max(0, completedAt - stages[completedStageIndex].receivedAt) : 0
         return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(activeStepElapsed)}` : complete ? `Completed in ${formatElapsed(completedDuration)}` : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
       })}</ol>
     </section>}
