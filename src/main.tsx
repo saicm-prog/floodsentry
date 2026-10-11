@@ -216,6 +216,7 @@ function SimulatorPage() {
   const activeStage = stages[stages.length - 1] || { id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }
   const activeStepIndex = simulationSteps.findIndex(step => step.id === activeStage.id)
   const completedStepIds = new Set(stages.map(stage => stage.id))
+  const activeStepElapsed = Math.max(0, elapsedSeconds - activeStage.receivedAt)
   return <><Header /><main className="page-shell">
     <section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Simulate a<br /><em>weather report.</em></h1><p>Paste a weather bulletin to find affected ZIP codes. Each simulation sends exactly one tailored TEST alert to the dedicated testing inbox; subscriber matches are shown for reference only.</p></section>
     <section className="simulator-card weather-report-card">
@@ -229,13 +230,13 @@ function SimulatorPage() {
     </section>
     {busy && <section className="simulation-progress" aria-live="polite" aria-label="Simulation progress">
       <div><p className="eyebrow">Live processing</p><h2>Working through<br />the <em>report.</em></h2></div>
-      <div className="elapsed-time"><span>Elapsed time</span><strong>{formatElapsed(elapsedSeconds)}</strong><small><i aria-hidden="true" /> Live connection active</small></div>
+      <div className="elapsed-time"><span>Time in this step</span><strong>{formatElapsed(activeStepElapsed)}</strong><small><i aria-hidden="true" /> Live connection active</small></div>
       <div className="progress-now"><span className="progress-kicker">Now working on</span><strong>{activeStage.label}</strong><p>{stageDetail(activeStage)}</p><div className="progress-track" aria-hidden="true"><span style={{ width: `${Math.max(8, ((Math.max(activeStepIndex, 0) + 1) / simulationSteps.length) * 100)}%` }} /></div><small>Updates appear as each task completes. Source research can take a little while.</small></div>
       <ol className="progress-steps">{simulationSteps.map((step, index) => {
         const skipped = step.id === 'verification' && activeStepIndex > index && !completedStepIds.has(step.id)
         const complete = completedStepIds.has(step.id) && step.id !== activeStage.id
         const current = step.id === activeStage.id
-        return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(elapsedSeconds)}` : complete ? `Completed at ${formatElapsed(stages.find(stage => stage.id === step.id)?.receivedAt || 0)}` : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
+        return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(activeStepElapsed)}` : complete ? 'Completed' : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
       })}</ol>
     </section>}
     {analysis && <section className="notifications-card weather-results" aria-label="Simulation results">
