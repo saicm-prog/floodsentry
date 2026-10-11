@@ -115,7 +115,7 @@ const formatElapsed = (seconds: number) => `${String(Math.floor(seconds / 60)).p
 const simulationSteps: Array<ProcessingStage & { detail: string }> = [
   { id: 'starting', label: 'Preparing the weather report', detail: 'Opening a live connection to process the provided bulletin.' },
   { id: 'areas', label: 'Identifying affected counties and cities', detail: 'Reading the bulletin for the hazard, places, and timing.' },
-  { id: 'research', label: 'Researching ZIP-code coverage from trusted sources', detail: 'Searching for evidence that connects the named areas to ZIP codes.' },
+  { id: 'research', label: 'Identifying affected ZIP codes', detail: 'Searching for evidence that connects the named areas to ZIP codes.' },
   { id: 'zip-codes', label: 'Reviewing affected ZIP-code coverage', detail: 'Checking the geographic matches before any alert can be sent.' },
   { id: 'verification', label: 'Verifying ZIP-code sources', detail: 'Cross-checking sources when the first lookup needs more evidence.' },
   { id: 'message', label: 'Drafting the resident message', detail: 'Writing a clear, local message from the verified report.' },
