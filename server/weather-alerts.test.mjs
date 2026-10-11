@@ -43,7 +43,7 @@ test('two calls: required web lookup then drafting; evidence retained and ZIPs d
   assert.equal(mock.calls[0].store, false)
   assert.deepEqual(result.zipCodes.map(zip => zip.zipCode), ['37303', '37311'])
   assert.match(mock.calls[1].input, /37311/)
-  assert.match(result.subject, /^\[TEST\]/)
+  assert.equal(result.subject, draft.subject)
   assert.match(result.message, /2012/)
   assert.equal(result.sources[0].url, sourceUrl)
 })
@@ -136,7 +136,7 @@ test('provider failures are actionable and never expose provider error bodies', 
   await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'incomplete' }) }) }), /incomplete/)
 })
 
-test('multi-ZIP event saves once per ZIP and sends one alert to the dedicated test inbox', async () => {
+test('multi-ZIP bulletin saves once per ZIP and sends one alert to the dedicated inbox', async () => {
   const db = database()
   try {
     const sent = []
@@ -145,7 +145,7 @@ test('multi-ZIP event saves once per ZIP and sends one alert to the dedicated te
     assert.equal(sent.length, 1)
     assert.deepEqual(sent[0].recipients, ['muthup.yt@gmail.com'])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 2)
-    assert.match(db.prepare('SELECT message FROM notifications').get().message, /^TEST/)
+    assert.match(db.prepare('SELECT message FROM notifications').get().message, /Historical report/)
   } finally { db.close() }
 })
 
@@ -166,7 +166,7 @@ test('draft failure creates no notifications and sends nothing', async () => {
   } finally { db.close() }
 })
 
-test('no matching subscribers still sends the dedicated test email and records the simulated event', async () => {
+test('no matching subscribers still sends the dedicated email and records the bulletin', async () => {
   const db = database()
   db.exec('DELETE FROM subscriptions')
   try {

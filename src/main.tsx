@@ -26,7 +26,7 @@ function Logo() { return <a className="logo" href="/" onClick={handleRouteClick}
 function Header() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/simulate" onClick={event => { close(); handleRouteClick(event) }}>Simulate event</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
+  return <header className="header"><Logo /><nav className={open ? 'nav open' : 'nav'}><a href="/" onClick={event => { close(); handleRouteClick(event) }}>Home</a><a href="/register" onClick={event => { close(); handleRouteClick(event) }}>Register</a><a href="/registrations" onClick={event => { close(); handleRouteClick(event) }}>Registrations</a><a href="/bulletin" onClick={event => { close(); handleRouteClick(event) }}>Provide bulletin</a></nav><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X /> : <Menu />}</button></header>
 }
 
 function Card({ storm }: { storm: Storm }) {
@@ -47,11 +47,11 @@ function SubscribeForm() {
       if (response.ok) { setEmail(''); setZipCode(''); setConsent(false) }
     } catch { setStatus('Start the local API with npm run dev:api first.') }
   }
-  return <form onSubmit={submit} className="registration-form"><label>Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" required /></label><label>U.S. ZIP code<input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="00000" required /></label><label className="consent"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} required /> I agree to receive local test alerts.</label><button className="button" type="submit">Register for alerts <ArrowUpRight size={17} /></button>{status && <p className="form-status" role="status">{status}</p>}</form>
+  return <form onSubmit={submit} className="registration-form"><label>Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" required /></label><label>U.S. ZIP code<input inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={event => setZipCode(event.target.value)} placeholder="00000" required /></label><label className="consent"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} required /> I agree to receive local flood alerts.</label><button className="button" type="submit">Register for alerts <ArrowUpRight size={17} /></button>{status && <p className="form-status" role="status">{status}</p>}</form>
 }
 
 function RegisterPage() {
-  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local preview / email alerts</p><h1>Stay ahead<br /><em>of the weather.</em></h1><p>Register by ZIP code for local alerts. Your registration is stored on this computer, and matching simulated events can send email through the configured Resend account.</p></section><section className="register-card"><SubscribeForm /></section></main><Footer /></>
+  return <><Header /><main className="page-shell"><section className="page-intro"><p className="eyebrow">Local preview / email alerts</p><h1>Stay ahead<br /><em>of the weather.</em></h1><p>Register by ZIP code for local alerts. Your registration is stored on this computer, and provided weather bulletins can send email through the configured Resend account.</p></section><section className="register-card"><SubscribeForm /></section></main><Footer /></>
 }
 
 function AccountPage() {
@@ -105,6 +105,7 @@ type WeatherAnalysis = {
 }
 type ProcessingStage = { id: string; label: string }
 type ProgressStage = ProcessingStage & { receivedAt: number }
+type BulletinTiming = Pick<WeatherAnalysis, 'issuedAt' | 'expiresAt'>
 type DeliveryResult = { status: string; sent: number; failed: number; details?: string[] }
 type SimulationResult = { analysis: WeatherAnalysis; message: string; email: DeliveryResult }
 type SimulatorIssue = { title: string; message: string }
@@ -112,18 +113,18 @@ type SimulatorIssue = { title: string; message: string }
 const formatElapsed = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
 const simulationSteps: Array<ProcessingStage & { detail: string }> = [
-  { id: 'starting', label: 'Preparing the weather report', detail: 'Opening a live connection to the local alert simulator.' },
+  { id: 'starting', label: 'Preparing the weather report', detail: 'Opening a live connection to process the provided bulletin.' },
   { id: 'areas', label: 'Identifying affected counties and cities', detail: 'Reading the bulletin for the hazard, places, and timing.' },
   { id: 'research', label: 'Researching ZIP-code coverage from trusted sources', detail: 'Searching for evidence that connects the named areas to ZIP codes.' },
   { id: 'zip-codes', label: 'Reviewing affected ZIP-code coverage', detail: 'Checking the geographic matches before any alert can be sent.' },
   { id: 'verification', label: 'Verifying ZIP-code sources', detail: 'Cross-checking sources when the first lookup needs more evidence.' },
-  { id: 'message', label: 'Drafting the resident message', detail: 'Writing a clear, local TEST message from the verified report.' },
+  { id: 'message', label: 'Drafting the resident message', detail: 'Writing a clear, local message from the verified report.' },
   { id: 'matching', label: 'Matching registered subscribers', detail: 'Finding local registrations in the affected ZIP codes.' },
-  { id: 'saving', label: 'Saving the local notification record', detail: 'Recording this simulated event in the local database.' },
-  { id: 'sending', label: 'Sending one test alert to the dedicated inbox', detail: 'Handing one TEST email to Resend for delivery.' },
+  { id: 'saving', label: 'Saving the local alert record', detail: 'Recording this bulletin in the local database.' },
+  { id: 'sending', label: 'Sending the alert to the delivery inbox', detail: 'Handing the email to Resend for delivery.' },
 ]
 
-const stageDetail = (stage: ProcessingStage) => simulationSteps.find(step => step.id === stage.id)?.detail || 'The simulator is working on this step.'
+const stageDetail = (stage: ProcessingStage) => simulationSteps.find(step => step.id === stage.id)?.detail || 'Flood Sentry is working on this step.'
 
 async function readSimulationStream(response: Response, onEvent: (event: { type: string; stage?: ProcessingStage; result?: SimulationResult; error?: string }) => void) {
   const contentType = response.headers.get('content-type') || ''
@@ -163,7 +164,9 @@ function SimulatorPage() {
   const [delivery, setDelivery] = useState<DeliveryResult | null>(null)
   const [historyError, setHistoryError] = useState('')
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [bulletinTiming, setBulletinTiming] = useState<BulletinTiming | null>(null)
   const simulationStartedAt = useRef<number | null>(null)
+  const lastProcessedBulletin = useRef('')
 
   const loadNotifications = async () => {
     try {
@@ -188,14 +191,14 @@ function SimulatorPage() {
     setStages(current => current.some(item => item.id === stage.id) ? current : [...current, { ...stage, receivedAt }])
   }
 
-  const sendTest = async (event: FormEvent) => {
+  const provideBulletin = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
     simulationStartedAt.current = Date.now()
     setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }]); setAnalysis(null); setDelivery(null); setError(null); setStatus('')
     let finalResult: SimulationResult | undefined
     try {
-      const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
+      const response = await fetch('/api/weather-bulletins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
       await readSimulationStream(response, update => {
         if ((update.type === 'stage' || update.type === 'connected' || update.type === 'heartbeat') && update.stage) receiveStage(update.stage)
         if (update.type === 'error') throw new Error(update.error || 'The simulator returned an unexpected error.')
@@ -203,14 +206,16 @@ function SimulatorPage() {
       })
       if (!finalResult) throw new Error('The simulator finished without a result.')
       setAnalysis(finalResult.analysis)
+      setBulletinTiming({ issuedAt: finalResult.analysis.issuedAt, expiresAt: finalResult.analysis.expiresAt })
+      lastProcessedBulletin.current = weatherReport.trim()
       setDelivery(finalResult.email)
       setStatus(finalResult.message)
       if (finalResult.email.status === 'not_configured') setError({ title: 'Email delivery is not configured.', message: finalResult.email.details?.join(' ') || 'The event was saved, but no email was sent. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.' })
-      if (finalResult.email.status === 'partial_failure') setError({ title: 'Alert delivery needs attention.', message: `The event was saved. ${finalResult.email.sent} email(s) sent and ${finalResult.email.failed} failed. ${finalResult.email.details?.join(' ') || 'Resend did not provide more detail.'} Running the simulator again sends one new TEST email to the dedicated inbox.` })
+      if (finalResult.email.status === 'partial_failure') setError({ title: 'Alert delivery needs attention.', message: `The bulletin was saved. ${finalResult.email.sent} email(s) sent and ${finalResult.email.failed} failed. ${finalResult.email.details?.join(' ') || 'Resend did not provide more detail.'} Providing the bulletin again sends a new email to the delivery inbox.` })
       await loadNotifications()
     } catch (cause) {
       setStatus('')
-      setError({ title: 'The simulation could not finish.', message: cause instanceof Error && !(cause instanceof TypeError) && !(cause instanceof SyntaxError) ? cause.message : 'The simulator lost contact with the local API. Check recent events before trying again; an event may already have been saved or sent.' })
+      setError({ title: 'The bulletin could not finish processing.', message: cause instanceof Error && !(cause instanceof TypeError) && !(cause instanceof SyntaxError) ? cause.message : 'Flood Sentry lost contact with the local API. Check recent events before trying again; an alert may already have been saved or sent.' })
     } finally { setBusy(false); simulationStartedAt.current = null }
   }
   const activeStage = stages[stages.length - 1] || { id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }
@@ -218,17 +223,18 @@ function SimulatorPage() {
   const completedStepIds = new Set(stages.map(stage => stage.id))
   const activeStepElapsed = Math.max(0, elapsedSeconds - activeStage.receivedAt)
   return <><Header /><main className="page-shell">
-    <section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Simulate a<br /><em>weather report.</em></h1><p>Paste a weather bulletin to find affected ZIP codes. Each simulation sends exactly one tailored TEST alert to the dedicated testing inbox; subscriber matches are shown for reference only.</p></section>
+    <section className="page-intro"><p className="eyebrow">Weather bulletin</p><h1>Provide a weather<br /><em>bulletin.</em></h1><p>Paste a weather bulletin to identify affected ZIP codes and prepare a clear alert. Each bulletin sends one email to the delivery inbox; subscriber matches are shown for reference only.</p></section>
     <section className="simulator-card weather-report-card">
-      <form onSubmit={sendTest} aria-busy={busy}>
-        <label htmlFor="weather-report">Weather report</label>
-        <textarea id="weather-report" value={weatherReport} onChange={event => setWeatherReport(event.target.value)} rows={17} minLength={40} maxLength={20000} required disabled={busy} placeholder="Paste the complete weather bulletin here…" aria-describedby="report-help" />
-        <p id="report-help">Paste the full report, including the affected places and state. Emails are labeled TEST, and ZIP coverage is estimated from the places named in the report.</p>
-        <button className="button" type="submit" disabled={busy}>{busy ? 'Processing report…' : 'Simulate and send test alerts'} <ArrowUpRight size={17} /></button>
+      <form onSubmit={provideBulletin} aria-busy={busy}>
+        <label htmlFor="weather-report">Weather bulletin</label>
+        <textarea id="weather-report" value={weatherReport} onChange={event => { const nextBulletin = event.target.value; setWeatherReport(nextBulletin); if (nextBulletin.trim() !== lastProcessedBulletin.current) setBulletinTiming(null) }} rows={17} minLength={40} maxLength={20000} required disabled={busy} placeholder="Paste the complete weather bulletin here…" aria-describedby="report-help" />
+        <p id="report-help">Paste the full bulletin, including affected places and state. ZIP coverage is estimated from the places named in the report.</p>
+        <button className="button" type="submit" disabled={busy}>{busy ? 'Processing bulletin…' : 'Prepare and send alert'} <ArrowUpRight size={17} /></button>
         {status && <p className="form-status success-status" role="status">{status}</p>}
       </form>
     </section>
-    {busy && <section className="simulation-progress" aria-live="polite" aria-label="Simulation progress">
+    {bulletinTiming && <section className="bulletin-timing" aria-label="Most recent bulletin timing"><p>Most recent bulletin timing</p><div><span>Issued</span><strong>{bulletinTiming.issuedAt}</strong></div><div><span>Expires</span><strong>{bulletinTiming.expiresAt}</strong></div></section>}
+    {busy && <section className="simulation-progress" aria-live="polite" aria-label="Bulletin processing progress">
       <div><p className="eyebrow">Live processing</p><h2>Working through<br />the <em>report.</em></h2></div>
       <div className="elapsed-time"><span>Time in this step</span><strong>{formatElapsed(activeStepElapsed)}</strong><small><i aria-hidden="true" /> Live connection active</small></div>
       <div className="progress-now"><span className="progress-kicker">Now working on</span><strong>{activeStage.label}</strong><p>{stageDetail(activeStage)}</p><div className="progress-track" aria-hidden="true"><span style={{ width: `${Math.max(8, ((Math.max(activeStepIndex, 0) + 1) / simulationSteps.length) * 100)}%` }} /></div><small>Updates appear as each task completes. Source research can take a little while.</small></div>
@@ -239,19 +245,19 @@ function SimulatorPage() {
         return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(activeStepElapsed)}` : complete ? 'Completed' : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
       })}</ol>
     </section>}
-    {analysis && <section className="notifications-card weather-results" aria-label="Simulation results">
-      <h2>Simulation results</h2>
+    {analysis && <section className="notifications-card weather-results" aria-label="Bulletin results">
+      <h2>Bulletin results</h2>
       <p><strong>{analysis.eventType}</strong> — {analysis.areas.join(', ')}</p>
       <p>Report issued: {analysis.issuedAt}<br />Report expires: {analysis.expiresAt}</p>
       <h3>Affected ZIP codes ({analysis.zipCodes.length})</h3>
       <p>{analysis.coverageNotes}</p>
       <ul className="zip-results">{analysis.zipCodes.map(zip => <li key={zip.zipCode}><strong>{zip.zipCode}</strong> — {zip.area}<p>{zip.evidence} <a href={zip.sourceUrl} target="_blank" rel="noreferrer">Source for {zip.zipCode} ↗</a></p></li>)}</ul>
       <h3>Resident alert</h3><strong>{analysis.subject}</strong><p className="alert-message">{analysis.message}</p>
-      {delivery && <section className={`delivery-summary delivery-${delivery.status}`}><h3>Email delivery</h3><p><strong>{delivery.sent} sent</strong> · {delivery.failed} failed</p>{delivery.details?.length ? <ul>{delivery.details.map((detail, index) => <li key={`${index}-${detail}`}>{detail}</li>)}</ul> : delivery.status === 'sent' ? <p>Resend accepted the single TEST email for delivery to the dedicated inbox.</p> : <p>No email was accepted for delivery. The dedicated test inbox is used for every simulation.</p>}</section>}
+      {delivery && <section className={`delivery-summary delivery-${delivery.status}`}><h3>Email delivery</h3><p><strong>{delivery.sent} sent</strong> · {delivery.failed} failed</p>{delivery.details?.length ? <ul>{delivery.details.map((detail, index) => <li key={`${index}-${detail}`}>{detail}</li>)}</ul> : delivery.status === 'sent' ? <p>Resend accepted the email for delivery to the dedicated inbox.</p> : <p>No email was accepted for delivery. The delivery inbox is used for every provided bulletin.</p>}</section>}
       <details><summary>Lookup sources</summary><ul>{analysis.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul></details>
     </section>}
-    <section className="notifications-card weather-results"><h2>Recent local events</h2>
-      {historyError ? <p role="alert">{historyError}</p> : notifications.length === 0 ? <p className="empty-state">No simulated events yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p className="alert-message">{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}
+    <section className="notifications-card weather-results"><h2>Recent bulletins</h2>
+      {historyError ? <p role="alert">{historyError}</p> : notifications.length === 0 ? <p className="empty-state">No bulletins have been provided yet.</p> : <div className="notification-list">{notifications.map(notification => <article key={notification.id}><strong>{notification.trigger_type.split('_').join(' ')}</strong><span>{notification.zip_code}</span><p className="alert-message">{notification.message}</p><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></article>)}</div>}
     </section>
   </main><Footer />{error && <ErrorModal title={error.title} message={error.message} onClose={() => setError(null)} />}</>
 }
@@ -269,7 +275,7 @@ function HomePage() {
       <section className="why section" id="why"><div><h2>Why <em>Flood<br />Sentry?</em></h2></div><div className="why-copy"><p>Emergency alerts often arrive while a storm is already unfolding. When danger moves quickly, people may have too little time to understand the risk, reach safety, and take the measures that protect their families and neighbors.</p><p>Flood Sentry was inspired by the July 2025 Central Texas floods. More than two dozen campers and counselors died at Camp Mystic, and the tragedy brought urgent attention to warning and evacuation timing. This project starts with a simple idea: earlier, clearer local information can give people more time to act.</p><a className="text-link" href="https://www.house.texas.gov/pdfs/committees/355/Report-on-the-Camp-Mystic-Flood-Disaster-of-July-4-2025.pdf?d=06182026" target="_blank" rel="noreferrer">Read the Texas House investigation <ArrowUpRight size={16} /></a></div></section>
       <section className="intro section"><div><p className="eyebrow">The big picture</p><h2>Every storm<br />has a <em>story.</em></h2></div><p>Storms are disturbances in the atmosphere, ranging from a brief thunderstorm to a sprawling tropical cyclone. Their shapes, ingredients, and hazards are different—but understanding the basics helps us make better decisions.</p></section>
       <section className="atlas section" id="atlas"><div className="section-heading"><div><p className="eyebrow">The guide / 04 entries</p><h2>Meet the <em>forces.</em></h2></div><p>Explore four of Earth’s most powerful weather systems.</p></div><div className="storm-grid">{storms.map(storm => <Card key={storm.id} storm={storm} />)}</div></section>
-      <section className="tools-section section"><div className="section-heading"><div><p className="eyebrow">Flood Sentry tools</p><h2>Stay <em>connected.</em></h2></div><p>Register for local alerts, review current subscribers, or simulate an event from one place.</p></div><div className="tools-grid"><a className="tool-card" href="/register" onClick={handleRouteClick}><span className="tool-number">01</span><strong>Register for alerts</strong><p>Join the local ZIP-code alert list.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/registrations" onClick={handleRouteClick}><span className="tool-number">02</span><strong>Current registrations</strong><p>Review the local subscriber directory.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/simulate" onClick={handleRouteClick}><span className="tool-number">03</span><strong>Simulate an event</strong><p>Create a local storm alert for testing.</p><ArrowUpRight size={19} /></a></div></section>
+      <section className="tools-section section"><div className="section-heading"><div><p className="eyebrow">Flood Sentry tools</p><h2>Stay <em>connected.</em></h2></div><p>Register for local alerts, review current subscribers, or provide a weather bulletin from one place.</p></div><div className="tools-grid"><a className="tool-card" href="/register" onClick={handleRouteClick}><span className="tool-number">01</span><strong>Register for alerts</strong><p>Join the local ZIP-code alert list.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/registrations" onClick={handleRouteClick}><span className="tool-number">02</span><strong>Current registrations</strong><p>Review the local subscriber directory.</p><ArrowUpRight size={19} /></a><a className="tool-card" href="/bulletin" onClick={handleRouteClick}><span className="tool-number">03</span><strong>Provide a weather bulletin</strong><p>Prepare a local flood alert from a supplied bulletin.</p><ArrowUpRight size={19} /></a></div></section>
       <section className="safety section" id="safety"><div><h2>Watch means<br /><em>be ready.</em></h2><p className="safety-text">Warning means take action. Have more than one way to receive alerts, know where you will shelter, and follow instructions from your local emergency managers.</p><a className="button dark" href="https://www.weather.gov/safety" target="_blank" rel="noreferrer">NWS safety hub <ArrowUpRight size={17} /></a></div><div className="safety-steps"><div><strong>01</strong><span>Get inside</span><p>Put walls between you and the weather.</p></div><div><strong>02</strong><span>Get informed</span><p>Use NOAA Weather Radio or official alerts.</p></div><div><strong>03</strong><span>Stay put</span><p>Wait for the all-clear from officials.</p></div></div></section>
       <section className="sources section" id="sources"><p className="eyebrow">Keep exploring</p><h2>Built from<br /><em>good sources.</em></h2><div className="source-list"><a href="https://www.weather.gov/spotterguide/types" target="_blank" rel="noreferrer"><span>NOAA / National Weather Service</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/hurricane" target="_blank" rel="noreferrer"><span>Hurricane safety & science</span><ArrowUpRight size={16} /></a><a href="https://www.weather.gov/safety/tornado" target="_blank" rel="noreferrer"><span>Tornado safety & science</span><ArrowUpRight size={16} /></a></div></section>
     </main><Footer />
@@ -300,7 +306,7 @@ function App() {
     return () => { window.removeEventListener('flood-sentry:navigate', navigate); window.removeEventListener('popstate', handlePopState) }
   }, [])
   // AccountPage and its local API are intentionally retained but hidden until the account experience is ready to return.
-  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/simulate' ? <SimulatorPage /> : <HomePage />
+  const page = path === '/register' ? <RegisterPage /> : path === '/registrations' ? <RegistrationsPage /> : path === '/bulletin' || path === '/simulate' ? <SimulatorPage /> : <HomePage />
   return <div className={`route-frame route-${transition}`} key={path}>{page}</div>
 }
 

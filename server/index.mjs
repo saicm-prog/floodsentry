@@ -56,15 +56,38 @@ const readBody = async request => {
 }
 const escapeHtml = value => String(value).replace(/[&<>'\"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;' }[character]))
 const safeResendDetail = value => String(value || 'Resend did not provide an error message.').replace(/[\r\n]+/g, ' ').trim().slice(0, 500)
+const emailParagraphs = value => escapeHtml(value).split(/\n{2,}/).filter(Boolean).map(paragraph => `<p style="margin:0 0 16px;color:#29465c;font-size:16px;line-height:1.65;">${paragraph.replace(/\n/g, '<br>')}</p>`).join('')
+const emailDetail = (label, value) => `<tr><td style="padding:14px 0;border-bottom:1px solid #d7e8ef;"><span style="display:block;margin-bottom:4px;color:#5b7384;font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;">${escapeHtml(label)}</span><span style="color:#102b46;font-size:15px;line-height:1.45;">${escapeHtml(value || 'Not specified')}</span></td></tr>`
+const floodSentryEmail = ({ triggerType, message, analysis }) => {
+  const areas = Array.isArray(analysis?.areas) && analysis.areas.length ? analysis.areas.join(' · ') : 'Affected area details are included below.'
+  const summary = message.replace(/^Internal training scenario[^\n]*\n\n/, '')
+  return `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;background:#eaf5f9;font-family:Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;">Internal training scenario: ${escapeHtml(triggerType)}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eaf5f9;"><tr><td align="center" style="padding:30px 14px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(16,43,70,.14);"><tr><td style="padding:28px 34px;background:#102b46;"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="width:34px;height:34px;border-radius:50%;background:#5cc9ed;text-align:center;color:#102b46;font-size:23px;line-height:34px;">✳</td><td style="padding-left:11px;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-.5px;">Flood <span style="color:#5cc9ed;">Sentry</span></td></tr></table></td></tr><tr><td style="padding:30px 34px 12px;"><div style="margin-bottom:22px;padding:12px 14px;background:#e2f6fc;border-left:4px solid #5cc9ed;color:#18465f;font-size:13px;line-height:1.5;"><strong>Internal training scenario:</strong> This is not an official emergency alert. For live weather information, follow the National Weather Service and local officials.</div><div style="display:inline-block;margin-bottom:11px;padding:6px 9px;border-radius:999px;background:#102b46;color:#bcefff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Flood Sentry alert</div><h1 style="margin:0 0 10px;color:#102b46;font-size:32px;line-height:1.12;letter-spacing:-1px;">${escapeHtml(triggerType)}</h1><p style="margin:0 0 27px;color:#496477;font-size:17px;line-height:1.55;"><strong style="color:#102b46;">Affected areas:</strong> ${escapeHtml(areas)}</p><h2 style="margin:0 0 14px;color:#102b46;font-size:20px;line-height:1.25;">What you need to know</h2>${emailParagraphs(summary)}</td></tr><tr><td style="padding:10px 34px 30px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top:1px solid #d7e8ef;">${emailDetail('Report issued', analysis?.issuedAt)}${emailDetail('Report expires', analysis?.expiresAt)}${emailDetail('ZIP-code coverage', analysis?.coverageNotes)}</table></td></tr><tr><td style="padding:21px 34px;background:#102b46;color:#c9e8f2;font-size:12px;line-height:1.55;">Flood Sentry helps make weather information easier to understand. This internal training scenario does not replace official emergency instructions.</td></tr></table></td></tr></table></body></html>`
+}
+const providedBulletinEmail = ({ triggerType, message, analysis }) => {
+  const areas = Array.isArray(analysis?.areas) && analysis.areas.length ? analysis.areas.join(' · ') : 'Affected area details are included below.'
+  return `<!doctype html>
+<html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#eaf5f9;font-family:Arial,Helvetica,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Flood Sentry alert: ${escapeHtml(triggerType)}</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eaf5f9;"><tr><td align="center" style="padding:30px 14px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(16,43,70,.14);">
+      <tr><td style="padding:28px 34px;background:#102b46;"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="width:34px;height:34px;border-radius:50%;background:#5cc9ed;text-align:center;color:#102b46;font-size:23px;line-height:34px;">✳</td><td style="padding-left:11px;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-.5px;">Flood <span style="color:#5cc9ed;">Sentry</span></td></tr></table></td></tr>
+      <tr><td style="padding:30px 34px 12px;"><div style="margin-bottom:22px;padding:12px 14px;background:#e2f6fc;border-left:4px solid #5cc9ed;color:#18465f;font-size:13px;line-height:1.5;">This summary was prepared from a weather bulletin provided to Flood Sentry. Follow local emergency managers and the National Weather Service for official updates.</div><div style="display:inline-block;margin-bottom:11px;padding:6px 9px;border-radius:999px;background:#102b46;color:#bcefff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Flood Sentry alert</div><h1 style="margin:0 0 10px;color:#102b46;font-size:32px;line-height:1.12;letter-spacing:-1px;">${escapeHtml(triggerType)}</h1><p style="margin:0 0 27px;color:#496477;font-size:17px;line-height:1.55;"><strong style="color:#102b46;">Affected areas:</strong> ${escapeHtml(areas)}</p><h2 style="margin:0 0 14px;color:#102b46;font-size:20px;line-height:1.25;">What you need to know</h2>${emailParagraphs(message)}</td></tr>
+      <tr><td style="padding:10px 34px 30px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top:1px solid #d7e8ef;">${emailDetail('Report issued', analysis?.issuedAt)}${emailDetail('Report expires', analysis?.expiresAt)}${emailDetail('ZIP-code coverage', analysis?.coverageNotes)}</table></td></tr>
+      <tr><td style="padding:21px 34px;background:#102b46;color:#c9e8f2;font-size:12px;line-height:1.55;">Flood Sentry helps make weather information easier to understand. This summary is based on a bulletin provided to Flood Sentry and does not replace official emergency instructions.</td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`
+}
 const hashPassword = async password => {
   const salt = randomBytes(16).toString('hex')
   const derivedKey = await scrypt(password, salt, 64)
   return `scrypt$${salt}$${Buffer.from(derivedKey).toString('hex')}`
 }
 
-async function sendResendAlert({ recipients, zipCode, triggerType, message, subject }) {
+async function sendResendAlert({ recipients, zipCode, triggerType, message, subject, analysis }) {
   if (!resendApiKey || !resendFromEmail) return { status: 'not_configured', sent: 0, failed: 0, details: ['Resend is not configured. Add both RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.'] }
-  const html = `<h1>Flood Sentry local alert</h1><p><strong>${escapeHtml(message)}</strong></p><p>Event type: ${escapeHtml(triggerType.replaceAll('_', ' '))}</p><p>ZIP code: ${escapeHtml(zipCode)}</p><p>This alert was generated by the local event simulator.</p>`
+  const html = providedBulletinEmail({ triggerType, message, analysis })
   const results = await Promise.all(recipients.map(async recipient => {
     try {
       const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -99,7 +122,7 @@ const server = createServer(async (request, response) => {
       if (!consent || !/^\d{5}$/.test(zipCode || '') || !/^\S+@\S+\.\S+$/.test(email || '')) return json(response, 400, { error: 'Enter a valid email, five-digit ZIP code, and accept the terms.' })
       const now = new Date().toISOString()
       db.prepare('INSERT INTO subscriptions (email, zip_code, consented_at, created_at) VALUES (?, ?, ?, ?)').run(email.trim().toLowerCase(), zipCode, now, now)
-      return json(response, 201, { message: 'You are subscribed for local test alerts.' })
+      return json(response, 201, { message: 'You are subscribed for local flood alerts.' })
     }
     if (request.method === 'GET' && request.url === '/api/subscriptions') return json(response, 200, { subscriptions: db.prepare('SELECT id, email, zip_code, consented_at, created_at FROM subscriptions ORDER BY id DESC').all() })
     if (request.method === 'POST' && request.url === '/api/accounts') {
@@ -112,7 +135,7 @@ const server = createServer(async (request, response) => {
       db.prepare('INSERT INTO accounts (full_name, email, password_hash, consented_at, created_at) VALUES (?, ?, ?, ?, ?)').run(fullName, normalizedEmail, passwordHash, now, now)
       return json(response, 201, { message: 'Your local Flood Sentry account is ready.' })
     }
-    if (request.method === 'POST' && request.url === '/api/test-alert') {
+    if (request.method === 'POST' && (request.url === '/api/weather-bulletins' || request.url === '/api/test-alert')) {
       const { weatherReport } = await readBody(request)
       response.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
