@@ -39,6 +39,8 @@ db.exec(`
 `)
 
 const json = (response, status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); response.end(JSON.stringify(body)) }
+// Keep progress messages small and immediately flushable so a browser can update
+// while an OpenAI request or email handoff is still in flight.
 const streamEvent = (response, body) => response.write(`data: ${JSON.stringify(body)}\n\n`)
 const readBody = async request => {
   let body = ''
@@ -89,6 +91,7 @@ async function sendResendAlert({ recipients, zipCode, triggerType, message, subj
 
 const server = createServer(async (request, response) => {
   let isEventStream = false
+  let progressHeartbeat
   if (request.method === 'OPTIONS') { response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' }); return response.end() }
   try {
     if (request.method === 'POST' && request.url === '/api/subscriptions') {
@@ -111,15 +114,34 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'POST' && request.url === '/api/test-alert') {
       const { weatherReport } = await readBody(request)
-      response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' })
+      response.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': '*',
+      })
       isEventStream = true
-      const result = await simulateWeatherReport(weatherReport, { db, sendAlert: sendResendAlert, onStage: stage => streamEvent(response, { type: 'stage', stage }) })
+      response.flushHeaders()
+      response.socket?.setNoDelay(true)
+      let currentStage = { id: 'starting', label: 'Preparing the weather report' }
+      const publishStage = stage => {
+        currentStage = stage
+        streamEvent(response, { type: 'stage', stage })
+      }
+      // Slow searches and delivery requests can take tens of seconds. Heartbeats
+      // keep the connection visibly alive without pretending a step is complete.
+      streamEvent(response, { type: 'connected', stage: currentStage })
+      progressHeartbeat = setInterval(() => streamEvent(response, { type: 'heartbeat', stage: currentStage }), 2500)
+      const result = await simulateWeatherReport(weatherReport, { db, sendAlert: sendResendAlert, onStage: publishStage })
+      clearInterval(progressHeartbeat)
       streamEvent(response, { type: 'complete', result })
       return response.end()
     }
     if (request.method === 'GET' && request.url === '/api/notifications') return json(response, 200, { notifications: db.prepare('SELECT * FROM notifications ORDER BY id DESC LIMIT 20').all() })
     return json(response, 404, { error: 'Not found' })
   } catch (error) {
+    clearInterval(progressHeartbeat)
     const message = error instanceof SimulatorError ? error.message : error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 'That email is already subscribed for local alerts.' : 'Local server error.'
     if (isEventStream) { streamEvent(response, { type: 'error', error: message }); return response.end() }
     if (error instanceof SimulatorError) return json(response, error.status, { error: message })

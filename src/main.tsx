@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState, type FormEvent, type MouseEvent } from 'react'
+import { StrictMode, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowDown, ArrowUpRight, CloudLightning, Menu, Snowflake, Wind, X } from 'lucide-react'
 import './styles.css'
@@ -104,11 +104,26 @@ type WeatherAnalysis = {
   sources: { url: string; title: string }[]; subject: string; message: string;
 }
 type ProcessingStage = { id: string; label: string }
+type ProgressStage = ProcessingStage & { receivedAt: number }
 type DeliveryResult = { status: string; sent: number; failed: number; details?: string[] }
 type SimulationResult = { analysis: WeatherAnalysis; message: string; email: DeliveryResult }
 type SimulatorIssue = { title: string; message: string }
 
 const formatElapsed = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+
+const simulationSteps: Array<ProcessingStage & { detail: string }> = [
+  { id: 'starting', label: 'Preparing the weather report', detail: 'Opening a live connection to the local alert simulator.' },
+  { id: 'areas', label: 'Identifying affected counties and cities', detail: 'Reading the bulletin for the hazard, places, and timing.' },
+  { id: 'research', label: 'Researching ZIP-code coverage from trusted sources', detail: 'Searching for evidence that connects the named areas to ZIP codes.' },
+  { id: 'zip-codes', label: 'Reviewing affected ZIP-code coverage', detail: 'Checking the geographic matches before any alert can be sent.' },
+  { id: 'verification', label: 'Verifying ZIP-code sources', detail: 'Cross-checking sources when the first lookup needs more evidence.' },
+  { id: 'message', label: 'Drafting the resident message', detail: 'Writing a clear, local TEST message from the verified report.' },
+  { id: 'matching', label: 'Matching registered subscribers', detail: 'Finding local registrations in the affected ZIP codes.' },
+  { id: 'saving', label: 'Saving the local notification record', detail: 'Recording this simulated event in the local database.' },
+  { id: 'sending', label: 'Sending one test alert to the dedicated inbox', detail: 'Handing one TEST email to Resend for delivery.' },
+]
+
+const stageDetail = (stage: ProcessingStage) => simulationSteps.find(step => step.id === stage.id)?.detail || 'The simulator is working on this step.'
 
 async function readSimulationStream(response: Response, onEvent: (event: { type: string; stage?: ProcessingStage; result?: SimulationResult; error?: string }) => void) {
   const contentType = response.headers.get('content-type') || ''
@@ -141,13 +156,14 @@ function SimulatorPage() {
   const [weatherReport, setWeatherReport] = useState('')
   const [busy, setBusy] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [stages, setStages] = useState<ProcessingStage[]>([])
+  const [stages, setStages] = useState<ProgressStage[]>([])
   const [analysis, setAnalysis] = useState<WeatherAnalysis | null>(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState<SimulatorIssue | null>(null)
   const [delivery, setDelivery] = useState<DeliveryResult | null>(null)
   const [historyError, setHistoryError] = useState('')
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const simulationStartedAt = useRef<number | null>(null)
 
   const loadNotifications = async () => {
     try {
@@ -161,22 +177,27 @@ function SimulatorPage() {
   useEffect(() => { void loadNotifications() }, [])
   useEffect(() => {
     if (!busy) return
-    const startedAt = Date.now()
-    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 250)
+    const updateElapsed = () => setElapsedSeconds(Math.floor((Date.now() - (simulationStartedAt.current || Date.now())) / 1000))
+    updateElapsed()
+    const timer = window.setInterval(updateElapsed, 250)
     return () => window.clearInterval(timer)
   }, [busy])
 
-  const receiveStage = (stage: ProcessingStage) => setStages(current => current.some(item => item.id === stage.id) ? current : [...current, stage])
+  const receiveStage = (stage: ProcessingStage) => {
+    const receivedAt = Math.floor((Date.now() - (simulationStartedAt.current || Date.now())) / 1000)
+    setStages(current => current.some(item => item.id === stage.id) ? current : [...current, { ...stage, receivedAt }])
+  }
 
   const sendTest = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Starting report analysis' }]); setAnalysis(null); setDelivery(null); setError(null); setStatus('')
+    simulationStartedAt.current = Date.now()
+    setBusy(true); setElapsedSeconds(0); setStages([{ id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }]); setAnalysis(null); setDelivery(null); setError(null); setStatus('')
     let finalResult: SimulationResult | undefined
     try {
       const response = await fetch('/api/test-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weatherReport }) })
       await readSimulationStream(response, update => {
-        if (update.type === 'stage' && update.stage) receiveStage(update.stage)
+        if ((update.type === 'stage' || update.type === 'connected' || update.type === 'heartbeat') && update.stage) receiveStage(update.stage)
         if (update.type === 'error') throw new Error(update.error || 'The simulator returned an unexpected error.')
         if (update.type === 'complete' && update.result) finalResult = update.result
       })
@@ -185,15 +206,18 @@ function SimulatorPage() {
       setDelivery(finalResult.email)
       setStatus(finalResult.message)
       if (finalResult.email.status === 'not_configured') setError({ title: 'Email delivery is not configured.', message: finalResult.email.details?.join(' ') || 'The event was saved, but no email was sent. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.' })
-      if (finalResult.email.status === 'partial_failure') setError({ title: 'Alert delivery needs attention.', message: `The event was saved. ${finalResult.email.sent} email(s) sent and ${finalResult.email.failed} failed. ${finalResult.email.details?.join(' ') || 'Resend did not provide more detail.'} Running the simulator again sends another test email to every matching subscriber.` })
+      if (finalResult.email.status === 'partial_failure') setError({ title: 'Alert delivery needs attention.', message: `The event was saved. ${finalResult.email.sent} email(s) sent and ${finalResult.email.failed} failed. ${finalResult.email.details?.join(' ') || 'Resend did not provide more detail.'} Running the simulator again sends one new TEST email to the dedicated inbox.` })
       await loadNotifications()
     } catch (cause) {
       setStatus('')
       setError({ title: 'The simulation could not finish.', message: cause instanceof Error && !(cause instanceof TypeError) && !(cause instanceof SyntaxError) ? cause.message : 'The simulator lost contact with the local API. Check recent events before trying again; an event may already have been saved or sent.' })
-    } finally { setBusy(false) }
+    } finally { setBusy(false); simulationStartedAt.current = null }
   }
+  const activeStage = stages[stages.length - 1] || { id: 'starting', label: 'Preparing the weather report', receivedAt: 0 }
+  const activeStepIndex = simulationSteps.findIndex(step => step.id === activeStage.id)
+  const completedStepIds = new Set(stages.map(stage => stage.id))
   return <><Header /><main className="page-shell">
-    <section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Simulate a<br /><em>weather report.</em></h1><p>Paste a weather bulletin to find affected ZIP codes and send a tailored test alert to matching subscribers.</p></section>
+    <section className="page-intro"><p className="eyebrow">Developer simulator</p><h1>Simulate a<br /><em>weather report.</em></h1><p>Paste a weather bulletin to find affected ZIP codes. Each simulation sends exactly one tailored TEST alert to the dedicated testing inbox; subscriber matches are shown for reference only.</p></section>
     <section className="simulator-card weather-report-card">
       <form onSubmit={sendTest} aria-busy={busy}>
         <label htmlFor="weather-report">Weather report</label>
@@ -204,9 +228,15 @@ function SimulatorPage() {
       </form>
     </section>
     {busy && <section className="simulation-progress" aria-live="polite" aria-label="Simulation progress">
-      <div><p className="eyebrow">Processing</p><h2>Working through<br />the <em>report.</em></h2></div>
-      <div className="elapsed-time"><span>Elapsed time</span><strong>{formatElapsed(elapsedSeconds)}</strong></div>
-      <ol>{stages.map((stage, index) => <li key={stage.id} className={index === stages.length - 1 ? 'current' : 'complete'}><span>{index === stages.length - 1 ? '●' : '✓'}</span>{stage.label}</li>)}</ol>
+      <div><p className="eyebrow">Live processing</p><h2>Working through<br />the <em>report.</em></h2></div>
+      <div className="elapsed-time"><span>Elapsed time</span><strong>{formatElapsed(elapsedSeconds)}</strong><small><i aria-hidden="true" /> Live connection active</small></div>
+      <div className="progress-now"><span className="progress-kicker">Now working on</span><strong>{activeStage.label}</strong><p>{stageDetail(activeStage)}</p><div className="progress-track" aria-hidden="true"><span style={{ width: `${Math.max(8, ((Math.max(activeStepIndex, 0) + 1) / simulationSteps.length) * 100)}%` }} /></div><small>Updates appear as each task completes. Source research can take a little while.</small></div>
+      <ol className="progress-steps">{simulationSteps.map((step, index) => {
+        const skipped = step.id === 'verification' && activeStepIndex > index && !completedStepIds.has(step.id)
+        const complete = completedStepIds.has(step.id) && step.id !== activeStage.id
+        const current = step.id === activeStage.id
+        return <li key={step.id} className={current ? 'current' : complete ? 'complete' : skipped ? 'skipped' : 'pending'}><span>{current ? '●' : complete ? '✓' : skipped ? '–' : String(index + 1).padStart(2, '0')}</span><div><strong>{step.label}</strong><small>{current ? `In progress · ${formatElapsed(elapsedSeconds)}` : complete ? `Completed at ${formatElapsed(stages.find(stage => stage.id === step.id)?.receivedAt || 0)}` : skipped ? 'Not needed for this report' : 'Waiting to begin'}</small></div></li>
+      })}</ol>
     </section>}
     {analysis && <section className="notifications-card weather-results" aria-label="Simulation results">
       <h2>Simulation results</h2>
@@ -216,7 +246,7 @@ function SimulatorPage() {
       <p>{analysis.coverageNotes}</p>
       <ul className="zip-results">{analysis.zipCodes.map(zip => <li key={zip.zipCode}><strong>{zip.zipCode}</strong> — {zip.area}<p>{zip.evidence} <a href={zip.sourceUrl} target="_blank" rel="noreferrer">Source for {zip.zipCode} ↗</a></p></li>)}</ul>
       <h3>Resident alert</h3><strong>{analysis.subject}</strong><p className="alert-message">{analysis.message}</p>
-      {delivery && <section className={`delivery-summary delivery-${delivery.status}`}><h3>Email delivery</h3><p><strong>{delivery.sent} sent</strong> · {delivery.failed} failed</p>{delivery.details?.length ? <ul>{delivery.details.map((detail, index) => <li key={`${index}-${detail}`}>{detail}</li>)}</ul> : delivery.status === 'sent' ? <p>Resend accepted every matching email for delivery.</p> : <p>No registered subscriber matched the affected ZIP codes.</p>}</section>}
+      {delivery && <section className={`delivery-summary delivery-${delivery.status}`}><h3>Email delivery</h3><p><strong>{delivery.sent} sent</strong> · {delivery.failed} failed</p>{delivery.details?.length ? <ul>{delivery.details.map((detail, index) => <li key={`${index}-${detail}`}>{detail}</li>)}</ul> : delivery.status === 'sent' ? <p>Resend accepted the single TEST email for delivery to the dedicated inbox.</p> : <p>No email was accepted for delivery. The dedicated test inbox is used for every simulation.</p>}</section>}
       <details><summary>Lookup sources</summary><ul>{analysis.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul></details>
     </section>}
     <section className="notifications-card weather-results"><h2>Recent local events</h2>

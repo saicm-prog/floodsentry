@@ -69,9 +69,11 @@
 .weather-report-card button:disabled{opacity:.65;cursor:wait}
 .simulation-progress{display:grid;grid-template-columns:1fr auto;gap:32px;margin-top:28px;padding:36px 40px;background:#122f4d;border:1px solid #315777}
 .simulation-progress .eyebrow{margin-bottom:16px}.simulation-progress h2{font-size:clamp(34px,4vw,52px);line-height:1;letter-spacing:-.06em;margin:0}.simulation-progress h2 em{color:#79d8f3}
-.elapsed-time{min-width:140px;text-align:right}.elapsed-time span{display:block;color:#b9d1df;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.elapsed-time strong{display:block;margin-top:8px;font-size:36px;font-variant-numeric:tabular-nums;color:#f7fbff}
-.simulation-progress ol{grid-column:1/-1;display:grid;gap:12px;margin:0;padding:0;list-style:none}.simulation-progress li{display:flex;gap:12px;align-items:center;color:#b9d1df}.simulation-progress li span{display:grid;place-items:center;width:22px;height:22px;border:1px solid #47799d;border-radius:50%;font-size:12px}.simulation-progress li.current{color:#f7fbff;font-weight:600}.simulation-progress li.current span{border-color:#79d8f3;color:#79d8f3;animation:progress-pulse 1.25s ease-in-out infinite}.simulation-progress li.complete span{border-color:#5cc9ed;color:#5cc9ed}
+.elapsed-time{min-width:172px;text-align:right}.elapsed-time>span{display:block;color:#b9d1df;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.elapsed-time>strong{display:block;margin-top:8px;font-size:36px;font-variant-numeric:tabular-nums;color:#f7fbff}.elapsed-time small{display:inline-flex;align-items:center;gap:7px;margin-top:11px;color:#bcefff;font-size:11px}.elapsed-time i{width:7px;height:7px;border-radius:50%;background:#5cc9ed;box-shadow:0 0 0 4px rgba(92,201,237,.13);animation:connection-pulse 1.5s ease-in-out infinite}
+.progress-now{grid-column:1/-1;padding:22px 24px;background:rgba(92,201,237,.09);border-left:3px solid #79d8f3}.progress-kicker{display:block;color:#79d8f3;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.progress-now>strong{display:block;margin-top:8px;color:#f7fbff;font-size:20px;font-weight:600}.progress-now p{max-width:620px;margin:8px 0 16px;color:#c5dbe7;line-height:1.5}.progress-now small{color:#b9d1df;font-size:12px}.progress-track{height:5px;margin:0 0 13px;overflow:hidden;background:#244d6c}.progress-track span{display:block;height:100%;background:linear-gradient(90deg,#5cc9ed,#bcefff);transition:width .45s ease}
+.progress-steps{grid-column:1/-1;display:grid;gap:4px;margin:0;padding:0;list-style:none}.progress-steps li{display:flex;gap:13px;align-items:flex-start;padding:12px 0;color:#7190a4;border-top:1px solid rgba(120,185,204,.16)}.progress-steps li>span{display:grid;flex:0 0 auto;place-items:center;width:24px;height:24px;border:1px solid #47799d;border-radius:50%;font-size:10px;font-variant-numeric:tabular-nums}.progress-steps li div{display:grid;gap:3px}.progress-steps li strong{font-size:14px;font-weight:500}.progress-steps li small{font-size:12px;line-height:1.4}.progress-steps li.current{color:#f7fbff}.progress-steps li.current>span{border-color:#79d8f3;color:#79d8f3;animation:progress-pulse 1.25s ease-in-out infinite}.progress-steps li.complete{color:#d7e9f5}.progress-steps li.complete>span{border-color:#5cc9ed;color:#5cc9ed}.progress-steps li.skipped{color:#8fa7b5}.progress-steps li.skipped>span{border-color:#57788e;color:#8fa7b5}
 @keyframes progress-pulse{50%{box-shadow:0 0 0 7px rgba(121,216,243,.12)}}
+@keyframes connection-pulse{50%{opacity:.45;transform:scale(.78)}}
 .weather-results{margin-top:28px;overflow-wrap:anywhere}
 .weather-results h2{font-size:32px;line-height:1.2;letter-spacing:-.03em;margin-bottom:24px}
 .weather-results h3{margin-top:32px}.weather-results p{color:#c5dbe7;line-height:1.6}
@@ -92,7 +94,7 @@
 .sources h2{grid-column:1;grid-row:1}
 .sources .source-list{grid-column:1/-1;grid-row:2}
 @media(max-width:720px){.sources .eyebrow,.sources h2,.sources .source-list{grid-column:auto;grid-row:auto}}
-@media(max-width:720px){.simulation-progress{grid-template-columns:1fr;padding:28px 24px}.elapsed-time{text-align:left}.simulation-progress ol{grid-column:auto}}
+@media(max-width:720px){.simulation-progress{grid-template-columns:1fr;padding:28px 24px}.elapsed-time{text-align:left}.progress-now,.progress-steps{grid-column:auto}}
 
 /* Tall topographic texture scrolls naturally with the document, with no vertical distortion. */
 html{background:#102b46}

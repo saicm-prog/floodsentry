@@ -136,14 +136,14 @@ test('provider failures are actionable and never expose provider error bodies', 
   await assert.rejects(analyzeWeatherReport(report, { apiKey: 'test-key', fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'incomplete' }) }) }), /incomplete/)
 })
 
-test('multi-ZIP event saves once per ZIP and emails only matching subscribers once', async () => {
+test('multi-ZIP event saves once per ZIP and sends one alert to the dedicated test inbox', async () => {
   const db = database()
   try {
     const sent = []
     const result = await simulateWeatherReport(report, { ...provider(), db, sendAlert: async message => { sent.push(message); return { status: 'sent', sent: 2, failed: 0 } } })
     assert.equal(result.matchedSubscribers, 2)
     assert.equal(sent.length, 1)
-    assert.deepEqual(sent[0].recipients.sort(), ['a@example.org', 'b@example.org'])
+    assert.deepEqual(sent[0].recipients, ['muthup.yt@gmail.com'])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 2)
     assert.match(db.prepare('SELECT message FROM notifications').get().message, /^TEST/)
   } finally { db.close() }
@@ -154,7 +154,7 @@ test('reports real processing stages in order', async () => {
   try {
     const stages = []
     await simulateWeatherReport(report, { ...provider(), db, onStage: stage => stages.push(stage.id), sendAlert: async () => ({ status: 'sent', sent: 2, failed: 0 }) })
-    assert.deepEqual(stages, ['starting', 'areas', 'zip-codes', 'message', 'matching', 'saving', 'sending'])
+    assert.deepEqual(stages, ['starting', 'areas', 'research', 'zip-codes', 'message', 'matching', 'saving', 'sending'])
   } finally { db.close() }
 })
 
@@ -166,13 +166,15 @@ test('draft failure creates no notifications and sends nothing', async () => {
   } finally { db.close() }
 })
 
-test('no matching subscribers skips delivery but records the simulated event', async () => {
+test('no matching subscribers still sends the dedicated test email and records the simulated event', async () => {
   const db = database()
   db.exec('DELETE FROM subscriptions')
   try {
-    const result = await simulateWeatherReport(report, { ...provider(), db, sendAlert: () => assert.fail('Must not send') })
-    assert.equal(result.email.status, 'no_recipients')
+    const sent = []
+    const result = await simulateWeatherReport(report, { ...provider(), db, sendAlert: async message => { sent.push(message); return { status: 'sent', sent: 1, failed: 0 } } })
+    assert.equal(result.email.status, 'sent')
     assert.equal(result.matchedSubscribers, 0)
+    assert.deepEqual(sent[0].recipients, ['muthup.yt@gmail.com'])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 2)
   } finally { db.close() }
 })
