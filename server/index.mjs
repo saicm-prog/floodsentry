@@ -84,7 +84,7 @@ const floodSentryEmail = ({ triggerType, message, analysis }) => {
 // eight-point star, then a white/sky-blue Flood Sentry wordmark. The text
 // presentation selector prevents email clients from swapping the star for a
 // colored emoji.
-const emailLogo = () => `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="width:32px;height:32px;border-radius:50%;background:#5cc9ed;text-align:center;color:#102b46;font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:600;line-height:32px;mso-line-height-rule:exactly;">&#10035;&#65038;</td><td style="padding-left:12px;color:#f7fbff;font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:600;letter-spacing:-1.1px;line-height:32px;">Flood<span style="color:#5cc9ed;"> Sentry</span></td></tr></table>`
+const emailLogo = () => `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td width="32" height="32" bgcolor="#5cc9ed" style="width:32px;height:32px;border-radius:50%;background:#5cc9ed!important;text-align:center;color:#102b46!important;font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:600;line-height:32px;mso-line-height-rule:exactly;">&#10035;&#65038;</td><td style="padding-left:12px;color:#f7fbff!important;font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:600;letter-spacing:-1.1px;line-height:32px;">Flood<span style="color:#5cc9ed!important;"> Sentry</span></td></tr></table>`
 const providedBulletinEmail = ({ triggerType, message, analysis }) => {
   const areas = Array.isArray(analysis?.areas) && analysis.areas.length ? analysis.areas.join(' · ') : 'Affected area details are included below.'
   return `<!doctype html>
