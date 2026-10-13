@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { promisify } from 'node:util'
 import { SimulatorError, simulateWeatherReport } from './weather-alerts.mjs'
 import { ensureCountyZipCrosswalk } from './county-zip-crosswalk.mjs'
+import { trainedModelStatus } from './trained-model.mjs'
 
 const port = 8787
 const databasePath = resolve('data/flood-sentry.sqlite')
@@ -47,6 +48,7 @@ db.exec(`
 `)
 const crosswalk = ensureCountyZipCrosswalk(db, crosswalkPath)
 console.log(`Local county-to-ZIP crosswalk ready (${crosswalk.rows.toLocaleString()} relationships${crosswalk.imported ? ', imported now' : ''}).`)
+console.log(`Trained model integration: ${trainedModelStatus().enabled ? 'enabled' : 'disabled'} (${trainedModelStatus().modelPath}).`)
 
 const json = (response, status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); response.end(JSON.stringify(body)) }
 // Keep progress messages small and immediately flushable so a browser can update

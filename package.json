@@ -10,6 +10,7 @@
     "data:download": "node scripts/download-county-zip-crosswalk.mjs",
     "build": "tsc -b && vite build",
     "test": "node --test server/*.test.mjs",
+    "model:check": "python3 -c \"import sklearn, pickle; print('scikit-learn', sklearn.__version__)\"",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -49,3 +49,18 @@ Run `npm run data:download` to refresh the locally stored Census crosswalk. Each
 The Node API must remain running for simulation and registration. Deploying only the static frontend does not deploy this local API.
 
 Implementation references: [2020 Census ZCTA-to-county relationship files](https://www.census.gov/geographies/reference-files/2020/geo/relationship-files.html) and [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+## Trained model integration
+
+The supplied `Exp1_BestModel` pickle is stored at `models/Exp1_BestModel`. Its integration is server-only and disabled by default. The adapter loads it through `server/trained_model_predict.py`, which calls `predict` and, when available, `predict_proba`. It never exposes the pickle or Python process to the browser.
+
+The current adapter intentionally does not attach itself to a user-facing request yet. Your training script shows that the model expects the test dataset’s feature columns in their original order and uses `HAS_DAMAGE` as the label, but it does not include the feature names or preprocessing pipeline. Before enabling it, add the exact feature preparation for a request type, then set:
+
+```dotenv
+FLOOD_SENTRY_MODEL_ENABLED=true
+FLOOD_SENTRY_MODEL_PATH=models/Exp1_BestModel
+FLOOD_SENTRY_MODEL_PYTHON=python3
+FLOOD_SENTRY_MODEL_REQUEST_TYPES=damage-risk
+```
+
+Use the internal `deriveWithTrainedModel({ requestType, features, featureNames })` function from the future request handler. The `features` array must contain the same numeric columns, in the same order and encoding used during training. Do not enable the integration until that mapping is implemented; an arbitrary weather-bulletin vector would produce an invalid conclusion. Install the Python runtime dependencies from the training environment first; this machine currently does not have scikit-learn installed, so live prediction is not enabled or verified.
