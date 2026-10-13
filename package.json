@@ -10,17 +10,18 @@
     "data:download": "node scripts/download-county-zip-crosswalk.mjs",
     "build": "tsc -b && vite build",
     "test": "node --test server/*.test.mjs",
-    "model:check": "python3 -c \"import sklearn, pickle; print('scikit-learn', sklearn.__version__)\"",
+    "model:check": "node --input-type=module -e \"import * as ort from 'onnxruntime-node'; const s=await ort.InferenceSession.create(process.env.FLOOD_SENTRY_MODEL_PATH || 'models/Exp1_BestModel.onnx'); console.log(s.inputNames, s.outputNames, s.inputMetadata)\"",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
+    "npm-run-all": "latest",
+    "onnxruntime-node": "^1.30.0",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",
-    "vite": "latest",
-    "npm-run-all": "latest"
+    "vite": "latest"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

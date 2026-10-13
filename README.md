@@ -52,15 +52,14 @@ Implementation references: [2020 Census ZCTA-to-county relationship files](https
 
 ## Trained model integration
 
-The supplied `Exp1_BestModel` pickle is stored at `models/Exp1_BestModel`. Its integration is server-only and disabled by default. The adapter loads it through `server/trained_model_predict.py`, which calls `predict` and, when available, `predict_proba`. It never exposes the pickle or Python process to the browser.
+The supplied `Exp1_BestModel.onnx` is stored at `models/Exp1_BestModel.onnx`. Its integration is server-only and disabled by default. The adapter loads it through `onnxruntime-node` and runs inference directly in Node.js. It never exposes the model to the browser and does not start a Python process.
 
 The current adapter intentionally does not attach itself to a user-facing request yet. Your training script shows that the model expects the test dataset’s feature columns in their original order and uses `HAS_DAMAGE` as the label, but it does not include the feature names or preprocessing pipeline. Before enabling it, add the exact feature preparation for a request type, then set:
 
 ```dotenv
 FLOOD_SENTRY_MODEL_ENABLED=true
-FLOOD_SENTRY_MODEL_PATH=models/Exp1_BestModel
-FLOOD_SENTRY_MODEL_PYTHON=python3
+FLOOD_SENTRY_MODEL_PATH=models/Exp1_BestModel.onnx
 FLOOD_SENTRY_MODEL_REQUEST_TYPES=damage-risk
 ```
 
-Use the internal `deriveWithTrainedModel({ requestType, features, featureNames })` function from the future request handler. The `features` array must contain the same numeric columns, in the same order and encoding used during training. Do not enable the integration until that mapping is implemented; an arbitrary weather-bulletin vector would produce an invalid conclusion. Install the Python runtime dependencies from the training environment first; this machine currently does not have scikit-learn installed, so live prediction is not enabled or verified.
+Use the internal `deriveWithTrainedModel({ requestType, features, featureNames })` function from the future request handler. The ONNX model metadata confirms one `float32` input with exactly 14 features and outputs `output_label` plus an exported probability map. The JavaScript adapter requests the scalar `output_label` because onnxruntime-node does not currently consume that map output directly. The `features` array must contain the same numeric columns, in the same order and encoding used during training. Do not enable the integration until that mapping is implemented; an arbitrary weather-bulletin vector would produce an invalid conclusion.
