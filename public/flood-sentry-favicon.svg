@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
-  <title>Flood Sentry</title>
-  <circle cx="32" cy="32" r="30" fill="#5cc9ed"/>
-  <g stroke="#102b46" stroke-width="3.5" stroke-linecap="round">
-    <path d="M32 17v30M17 32h30M21.4 21.4l21.2 21.2M42.6 21.4 21.4 42.6"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-labelledby="title">
+  <title id="title">FloodSentry Wave Shield</title>
+  <rect width="180" height="180" rx="38" fill="#102b46"/>
+  <svg x="14" y="6" width="152" height="168" viewBox="320 220 616 680">
+  <path fill="#f3f8fb" d="M627 242C613 242 603 253 589 262C525 302 442 323 368 340C350 344 342 358 342 378V485C342 537 343 585 360 603C419 651 502 625 577 582L676 527C741 493 799 492 840 522C881 550 895 584 887 615C907 559 912 453 912 378C912 356 908 344 888 339C801 319 716 287 650 249C641 244 635 242 627 242Z"/>
+  <path fill="#5cc9ed" d="M370 631C468 702 582 620 700 555C762 521 817 530 852 570C812 553 773 577 773 612C773 656 827 676 871 654C817 752 728 822 627 874C513 811 419 729 370 631Z"/>
+  </svg>
 </svg>

@@ -1,0 +1,27 @@
+Tool: built-in image_gen (not CLI/API fallback)
+Asset: public/images/floodsentry-cover-v1.png
+Use: downloadable cover artwork; not yet placed on a page.
+
+Use case: ads-marketing.
+Asset type: a polished wide 16:9 cover image for the existing FloodSentry weather-information app, suitable for a Congressional App Challenge presentation and app cover.
+
+Primary request: communicate FOUR distinct aspects of FloodSentry clearly in one compelling, welcoming image. Make this feel like an expertly art-directed civic technology brand cover, not a busy infographic or screenshot.
+
+Style: beautiful contemporary editorial illustration with subtle dimensional paper-cut depth, crisp clean shapes, restrained soft gradients, elegant details, excellent typography and generous breathing room. Professional, friendly, calm and understandable to all education levels. Rich navy backdrop with luminous sky-blue and soft-white illustrations. Flat graphic readability with tactile visual interest; not childish, not neon, not dramatic disaster advertising.
+
+Composition: widescreen landscape, approximately 16:9. A spacious upper title area with one large left-aligned joined wordmark “FloodSentry”; no space between Flood and Sentry. An understated purpose line below it. Below, a coherent row of FOUR equally important illustrated scenes, each with ONE clear label. Unify the four scenes through a flowing light-blue water/ribbon motif and subtle topographic contour textures, but preserve distinct identities and generous separation. Maintain safe outer margins so nothing is cropped. Build a strong balanced composition that still reads as a thumbnail.
+
+The four scenes, in order:
+1. Weather education: a clear illustrated open weather guide with storm clouds, rainfall, a small landscape and rising water. This represents learning about weather, causes and risks.
+2. ZIP-code registration: a clean minimal subscription form silhouette, a five-position ZIP input motif, a recognizable USA map with a location pin and a simple envelope. No personal data or fake addresses.
+3. Clear safety reports: a dense bulletin sheet transforms into a friendly readable report on a phone or email card. Include simple damage imagery of water near a house and three clear checklist lines. This represents turning complex bulletins into plain-language damage descriptions and protective actions.
+4. Local help: a modest community assistance building on higher ground with a blue location pin and a small local-area map with two other help pins. Represent nearby assistance information, NOT a promise of a currently open shelter. No route lines, no operational status labels.
+
+Text (verbatim, all in one clean DM Sans-like sans-serif family):
+Main wordmark: “FloodSentry”
+Purpose line: “Clear weather information. Practical local action.”
+Four scene labels: “Understand weather” | “Register by ZIP” | “Get clear reports” | “Find local help”
+Render only those exact text strings, with correct spelling and no additional small print, letters, numbers, captions or gibberish. The four labels must be legible and aligned consistently.
+
+Exact brand palette: deep navy #102b46 and #0b2035, sky blue #5cc9ed, pale sky #bcefff, ocean blue #176a8b, soft white #f3f8fb. White text on navy; dark navy text on light panels if any. Avoid ALL red, orange, green, purple, yellow, black and gray-dominant areas.
+Constraints: use the exact brand spelling FloodSentry with no spaces everywhere. Do not introduce a new logo or redesign the app's existing mark; the joined text wordmark alone is enough. No government seals, official weather-service marks, Red Cross logos, alarmist headlines, emergency-alert claims, real-time forecasting claims, model scores or promises to save lives. No watermarks. Output one finished cover image, not multiple options.

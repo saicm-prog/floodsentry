@@ -1,0 +1,15 @@
+Tool: built-in image_gen (not CLI/API fallback)
+Asset: public/images/floodsentry-cover-v2.png
+Edit target: public/images/floodsentry-cover-v1.png
+Logo reference: public/flood-sentry-wave-shield-email.png
+Use: downloadable cover artwork; not yet placed on a page. Original cover retained.
+
+Use case: compositing.
+Edit target: Image 1, the existing wide FloodSentry cover.
+Supporting insert: Image 2, the app's existing Wave Shield logo.
+
+Make ONE targeted edit to Image 1: add the Wave Shield from Image 2 in the unoccupied upper-right sky area. Use the supplied mark accurately, with the same white upper shield, sky-blue lower wave and navy wave-shaped negative space. Do not redesign the logo. Extract the shield itself; do not add Image 2's rectangular navy background as a box.
+
+Place the logo entirely within the empty top-right margin above the landscape and above the small cloud at the far right. On the 1672 × 941 cover, a useful placement is approximately x=1500–1620, y=15–140; adjust slightly only to avoid any overlap. Make it clean and visible, not huge. It must not cover or touch any existing text, cloud, sun, mountain, town, bridge, river, book, form, phone, building, map, labels, or other meaningful illustration.
+
+Preserve EVERYTHING ELSE in Image 1 unchanged: same canvas and aspect ratio, exact large joined spelling “FloodSentry”, exact purpose line “Clear weather information. Practical local action.”, all four illustrations, the flowing water ribbon, topographic background, colors, lighting, font, text sizes, spacing, and the labels “Understand weather”, “Register by ZIP”, “Get clear reports”, and “Find local help”. Do not crop, move, replace, resize or repaint those elements. No new wording, extra badges, borders, rectangles or watermarks. The only new visible object should be the supplied Wave Shield in previously empty sky space. Retain the opaque full-cover background.

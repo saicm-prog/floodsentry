@@ -7,12 +7,18 @@ import { promisify } from 'node:util'
 import { SimulatorError, simulateWeatherReport } from './weather-alerts.mjs'
 import { ensureCountyZipCrosswalk } from './county-zip-crosswalk.mjs'
 import { trainedModelStatus } from './trained-model.mjs'
+import { buildAlertEmailContent } from './email-templates.mjs'
+import { isUniqueConstraintError, removeRegistration } from './registrations.mjs'
+import { confirmSubscription, ensureSubscriptionVerification, requestSubscription, sendConfirmationEmail } from './subscription-verification.mjs'
+import { validateEmail } from '../src/emailValidation.ts'
+import { normalizeBrandName } from '../src/branding.ts'
+import { migrateNotificationBranding } from './branding.mjs'
 
 const port = 8787
 const databasePath = resolve('data/flood-sentry.sqlite')
 const crosswalkPath = resolve('data/tab20_zcta520_county20_natl.txt')
 const resendApiKey = process.env.RESEND_API_KEY
-const resendFromEmail = process.env.RESEND_FROM_EMAIL
+const resendFromEmail = normalizeBrandName(process.env.RESEND_FROM_EMAIL || '')
 const scrypt = promisify(scryptCallback)
 mkdirSync(dirname(databasePath), { recursive: true })
 const db = new DatabaseSync(databasePath)
@@ -46,6 +52,9 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `)
+ensureSubscriptionVerification(db)
+const rebrandedReports = migrateNotificationBranding(db)
+if (rebrandedReports) console.log(`Updated FloodSentry branding in ${rebrandedReports} saved report records.`)
 const crosswalk = ensureCountyZipCrosswalk(db, crosswalkPath)
 console.log(`Local county-to-ZIP crosswalk ready (${crosswalk.rows.toLocaleString()} relationships${crosswalk.imported ? ', imported now' : ''}).`)
 console.log(`Trained model integration: ${trainedModelStatus().enabled ? 'enabled' : 'disabled'} (${trainedModelStatus().modelPath}).`)
@@ -66,40 +75,11 @@ const readBody = async request => {
     return value
   } catch { throw new SimulatorError('Request body must be a JSON object.', 400) }
 }
-const escapeHtml = value => String(value).replace(/[&<>'\"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;' }[character]))
 const safeResendDetail = value => String(value || 'Resend did not provide an error message.').replace(/[\r\n]+/g, ' ').trim().slice(0, 500)
 const recordBulletinError = (stage, message) => {
   try {
     db.prepare('INSERT INTO bulletin_errors (stage, message, created_at) VALUES (?, ?, ?)').run(String(stage || 'Unknown stage').slice(0, 160), safeResendDetail(message), new Date().toISOString())
   } catch (error) { console.error('Could not save bulletin error', error) }
-}
-const emailParagraphs = value => escapeHtml(value).split(/\n{2,}/).filter(Boolean).map(paragraph => `<p style="margin:0 0 16px;color:#29465c;font-size:16px;line-height:1.65;">${paragraph.replace(/\n/g, '<br>')}</p>`).join('')
-const emailDetail = (label, value) => `<tr><td style="padding:14px 0;border-bottom:1px solid #d7e8ef;"><span style="display:block;margin-bottom:4px;color:#5b7384;font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;">${escapeHtml(label)}</span><span style="color:#102b46;font-size:15px;line-height:1.45;">${escapeHtml(value || 'Not specified')}</span></td></tr>`
-const floodSentryEmail = ({ triggerType, message, analysis }) => {
-  const areas = Array.isArray(analysis?.areas) && analysis.areas.length ? analysis.areas.join(' · ') : 'Affected area details are included below.'
-  const summary = message.replace(/^Internal training scenario[^\n]*\n\n/, '')
-  return `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;background:#eaf5f9;font-family:Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;">Internal training scenario: ${escapeHtml(triggerType)}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eaf5f9;"><tr><td align="center" style="padding:30px 14px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(16,43,70,.14);"><tr><td style="padding:28px 34px;background:#102b46;"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="width:34px;height:34px;border-radius:50%;background:#5cc9ed;text-align:center;color:#102b46;font-size:23px;line-height:34px;">✳</td><td style="padding-left:11px;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-.5px;">Flood <span style="color:#5cc9ed;">Sentry</span></td></tr></table></td></tr><tr><td style="padding:30px 34px 12px;"><div style="margin-bottom:22px;padding:12px 14px;background:#e2f6fc;border-left:4px solid #5cc9ed;color:#18465f;font-size:13px;line-height:1.5;"><strong>Internal training scenario:</strong> This is not an official emergency alert. For live weather information, follow the National Weather Service and local officials.</div><div style="display:inline-block;margin-bottom:11px;padding:6px 9px;border-radius:999px;background:#102b46;color:#bcefff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Flood Sentry alert</div><h1 style="margin:0 0 10px;color:#102b46;font-size:32px;line-height:1.12;letter-spacing:-1px;">${escapeHtml(triggerType)}</h1><p style="margin:0 0 27px;color:#496477;font-size:17px;line-height:1.55;"><strong style="color:#102b46;">Affected areas:</strong> ${escapeHtml(areas)}</p><h2 style="margin:0 0 14px;color:#102b46;font-size:20px;line-height:1.25;">What you need to know</h2>${emailParagraphs(summary)}</td></tr><tr><td style="padding:10px 34px 30px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top:1px solid #d7e8ef;">${emailDetail('Report issued', analysis?.issuedAt)}${emailDetail('Report expires', analysis?.expiresAt)}${emailDetail('ZIP-code coverage', analysis?.coverageNotes)}</table></td></tr><tr><td style="padding:21px 34px;background:#102b46;color:#c9e8f2;font-size:12px;line-height:1.55;">Flood Sentry helps make weather information easier to understand. This internal training scenario does not replace official emergency instructions.</td></tr></table></td></tr></table></body></html>`
-}
-// Keep this mark aligned with the website: a sky-blue circle, a dark-blue
-// eight-point star, then a white/sky-blue Flood Sentry wordmark. The text
-// presentation selector prevents email clients from swapping the star for a
-// colored emoji.
-const emailLogo = () => `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td width="32" height="32" bgcolor="#5cc9ed" style="width:32px;height:32px;border-radius:50%;background:#5cc9ed!important;text-align:center;color:#102b46!important;font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:600;line-height:32px;mso-line-height-rule:exactly;">&#10035;&#65038;</td><td style="padding-left:12px;color:#f7fbff!important;font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:600;letter-spacing:-1.1px;line-height:32px;">Flood<span style="color:#5cc9ed!important;"> Sentry</span></td></tr></table>`
-const providedBulletinEmail = ({ triggerType, message, analysis }) => {
-  const areas = Array.isArray(analysis?.areas) && analysis.areas.length ? analysis.areas.join(' · ') : 'Affected area details are included below.'
-  return `<!doctype html>
-<html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#eaf5f9;font-family:Arial,Helvetica,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Flood Sentry alert: ${escapeHtml(triggerType)}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eaf5f9;"><tr><td align="center" style="padding:30px 14px;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(16,43,70,.14);">
-      <tr><td style="padding:28px 34px;background:#102b46;">${emailLogo()}</td></tr>
-      <tr><td style="padding:30px 34px 12px;"><div style="margin-bottom:22px;padding:12px 14px;background:#e2f6fc;border-left:4px solid #5cc9ed;color:#18465f;font-size:13px;line-height:1.5;">This summary was prepared from a weather bulletin provided to Flood Sentry. Follow local emergency managers and the National Weather Service for official updates.</div><div style="display:inline-block;margin-bottom:11px;padding:6px 9px;border-radius:999px;background:#102b46;color:#bcefff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Flood Sentry alert</div><h1 style="margin:0 0 10px;color:#102b46;font-size:32px;line-height:1.12;letter-spacing:-1px;">${escapeHtml(triggerType)}</h1><p style="margin:0 0 27px;color:#496477;font-size:17px;line-height:1.55;"><strong style="color:#102b46;">Affected areas:</strong> ${escapeHtml(areas)}</p><h2 style="margin:0 0 14px;color:#102b46;font-size:20px;line-height:1.25;">What you need to know</h2>${emailParagraphs(message)}</td></tr>
-      <tr><td style="padding:10px 34px 30px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top:1px solid #d7e8ef;">${emailDetail('Report issued', analysis?.issuedAt)}${emailDetail('Report expires', analysis?.expiresAt)}${emailDetail('ZIP-code coverage', analysis?.coverageNotes)}</table></td></tr>
-      <tr><td style="padding:21px 34px;background:#102b46;color:#c9e8f2;font-size:12px;line-height:1.55;">Flood Sentry helps make weather information easier to understand. This summary is based on a bulletin provided to Flood Sentry and does not replace official emergency instructions.</td></tr>
-    </table>
-  </td></tr></table>
-</body></html>`
 }
 const hashPassword = async password => {
   const salt = randomBytes(16).toString('hex')
@@ -109,13 +89,13 @@ const hashPassword = async password => {
 
 async function sendResendAlert({ recipients, zipCode, triggerType, message, subject, analysis }) {
   if (!resendApiKey || !resendFromEmail) return { status: 'not_configured', sent: 0, failed: 0, details: ['Resend is not configured. Add both RESEND_API_KEY and RESEND_FROM_EMAIL to .env, then restart the API.'] }
-  const html = providedBulletinEmail({ triggerType, message, analysis })
+  const emailContent = buildAlertEmailContent({ triggerType, message, analysis })
   const results = await Promise.all(recipients.map(async recipient => {
     try {
       const resendResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendApiKey}` },
-        body: JSON.stringify({ from: resendFromEmail, to: [recipient], subject, text: message, html }),
+        body: JSON.stringify({ from: resendFromEmail, to: [recipient], subject, ...emailContent }),
         signal: AbortSignal.timeout(30000),
       })
       if (resendResponse.ok) return { sent: true }
@@ -138,25 +118,31 @@ const server = createServer(async (request, response) => {
   let isEventStream = false
   let progressHeartbeat
   let errorStage = 'Request setup'
-  if (request.method === 'OPTIONS') { response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' }); return response.end() }
+  if (request.method === 'OPTIONS') { response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS' }); return response.end() }
   try {
     if (request.method === 'POST' && request.url === '/api/subscriptions') {
-      const { email, zipCode, consent } = await readBody(request)
-      if (!consent || !/^\d{5}$/.test(zipCode || '') || !/^\S+@\S+\.\S+$/.test(email || '')) return json(response, 400, { error: 'Enter a valid email, five-digit ZIP code, and accept the terms.' })
-      const now = new Date().toISOString()
-      db.prepare('INSERT INTO subscriptions (email, zip_code, consented_at, created_at) VALUES (?, ?, ?, ?)').run(email.trim().toLowerCase(), zipCode, now, now)
-      return json(response, 201, { message: 'You are subscribed for local flood alerts.' })
+      const result = await requestSubscription(db, await readBody(request), details => sendConfirmationEmail(details, { apiKey: resendApiKey, fromEmail: resendFromEmail }))
+      return json(response, result.status, result.body)
     }
-    if (request.method === 'GET' && request.url === '/api/subscriptions') return json(response, 200, { subscriptions: db.prepare('SELECT id, email, zip_code, consented_at, created_at FROM subscriptions ORDER BY id DESC').all() })
+    if (request.method === 'POST' && request.url === '/api/subscriptions/confirm') {
+      const result = confirmSubscription(db, await readBody(request))
+      return json(response, result.status, result.body)
+    }
+    if (request.method === 'GET' && request.url === '/api/subscriptions') return json(response, 200, { subscriptions: db.prepare('SELECT id, email, zip_code, consented_at, created_at, verified_at FROM subscriptions ORDER BY id DESC').all() })
+    if (request.method === 'DELETE' && request.url === '/api/subscriptions') {
+      const result = removeRegistration(db, await readBody(request))
+      return json(response, result.status, result.body)
+    }
     if (request.method === 'POST' && request.url === '/api/accounts') {
       const { name, email, password, consent } = await readBody(request)
       const fullName = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : ''
-      const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
-      if (!consent || fullName.length < 2 || fullName.length > 100 || !/^\S+@\S+\.\S+$/.test(normalizedEmail) || typeof password !== 'string' || password.length < 12) return json(response, 400, { error: 'Enter your full name, a valid email, a password of at least 12 characters, and accept the terms.' })
+      const checkedEmail = validateEmail(email)
+      if (!checkedEmail.valid) return json(response, 400, { error: checkedEmail.error })
+      if (consent !== true || fullName.length < 2 || fullName.length > 100 || typeof password !== 'string' || password.length < 12) return json(response, 400, { error: 'Enter your full name, a valid email, a password of at least 12 characters, and accept the terms.' })
       const now = new Date().toISOString()
       const passwordHash = await hashPassword(password)
-      db.prepare('INSERT INTO accounts (full_name, email, password_hash, consented_at, created_at) VALUES (?, ?, ?, ?, ?)').run(fullName, normalizedEmail, passwordHash, now, now)
-      return json(response, 201, { message: 'Your local Flood Sentry account is ready.' })
+      db.prepare('INSERT INTO accounts (full_name, email, password_hash, consented_at, created_at) VALUES (?, ?, ?, ?, ?)').run(fullName, checkedEmail.normalized, passwordHash, now, now)
+      return json(response, 201, { message: 'Your local FloodSentry account is ready.' })
     }
     if (request.method === 'POST' && (request.url === '/api/weather-bulletins' || request.url === '/api/test-alert')) {
       const { weatherReport } = await readBody(request)
@@ -191,13 +177,13 @@ const server = createServer(async (request, response) => {
     return json(response, 404, { error: 'Not found' })
   } catch (error) {
     clearInterval(progressHeartbeat)
-    const message = error instanceof SimulatorError ? error.message : error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 'That email is already subscribed for local alerts.' : 'Local server error.'
+    const message = error instanceof SimulatorError ? error.message : isUniqueConstraintError(error) ? 'That email is already subscribed for local alerts.' : 'Local server error.'
     if (request.method === 'POST' && (request.url === '/api/weather-bulletins' || request.url === '/api/test-alert')) recordBulletinError(errorStage, message)
     if (isEventStream) { streamEvent(response, { type: 'error', error: message }); return response.end() }
     if (error instanceof SimulatorError) return json(response, error.status, { error: message })
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return json(response, 409, { error: request.url === '/api/accounts' ? 'An account already uses that email address.' : 'That email is already subscribed for local alerts.' })
+    if (isUniqueConstraintError(error)) return json(response, 409, { error: request.url === '/api/accounts' ? 'An account already uses that email address.' : 'That email is already subscribed for local alerts.' })
     console.error(error); return json(response, 500, { error: 'Local server error.' })
   }
 })
 
-server.listen(port, '127.0.0.1', () => console.log(`Flood Sentry local API: http://127.0.0.1:${port}`))
+server.listen(port, '127.0.0.1', () => console.log(`FloodSentry local API: http://127.0.0.1:${port}`))

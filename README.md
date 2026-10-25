@@ -1,65 +1,195 @@
-# Flood Sentry
+# FloodSentry
 
-A static React + Vite + TypeScript guide to understanding different types of storms.
+**Clear weather information. Practical local action.**
 
-## Commands
+![FloodSentry cover: weather education, ZIP-code registration, clear reports, and local help.](public/images/floodsentry-cover-v2.png)
+
+FloodSentry helps people understand dangerous weather and decide what to do next. It combines an illustrated weather guide with plain-language bulletin reports.
+
+This U.S.-focused prototype was inspired by the Camp Mystic flooding in Texas. Its goal is clearer communication, not replacing official warnings.
+
+## What the app does
+
+- **Explain the weather.** Ten illustrated chapters cover causes, impacts, and precautions. Readers can explore extra science or print the guide.
+- **Register by ZIP code.** Users enter an email, a five-digit U.S. ZIP code, and consent. An emailed code confirms access to their inbox.
+- **Make bulletins easier to understand.** A pasted report becomes a summary, one or two damage paragraphs, and numbered protective actions.
+- **Find local help.** Reports include source-checked assistance listings when available. Unverified locations are omitted, with Red Cross and 211 resources as fallbacks.
+
+Reports show everyday language first. Exact bulletin identifiers and technical details appear afterward.
+
+> **Current status:** This is a local prototype, not a live warning service. Bulletin submissions send one email to the project's test inbox. They do not broadcast to registered users.
+
+## Judge tour
+
+Allow about five minutes after setup. Education pages need no account or API key.
+
+| Page | What to review |
+| --- | --- |
+| `/` — Home | The mission, storm cards, and links to the app's tools. |
+| `/learn` — Weather guide | Ten illustrated topics, practical precautions, source links, and printable content. |
+| `/register` — Register | Email validation, ZIP entry, consent, and inbox confirmation. |
+| `/bulletin` — Upload bulletin | Plain-language reports, possible damage, protective actions, local help, and processing progress. |
+| `/registrations` — Registrations | Local confirmed registrations and the removal option. Use only demonstration data. |
+| `/errors` — Errors | Saved processing failures that help explain unsuccessful requests. |
+
+### Review without sending email
+
+1. Open the homepage and weather guide using the local setup below.
+2. Expand a storm card. Follow a guide chapter and its source links.
+3. Run `npm run email:preview` to generate an example report without calling external services.
+4. Open `output/email-preview/index.html` in a browser. Review damage, actions, local help, and technical details.
+5. Run the tests and production build using the commands below.
+
+### Review the connected workflow
+
+Configure the provider keys before this part. Submissions can incur API charges and send real email.
+
+1. Start the API and frontend. Open `/bulletin` and select **Load sample**.
+2. Review the historical Tennessee bulletin dated June 10, 2012. Loading it does not send anything.
+3. Select **Prepare and send alert** to run the connected demonstration.
+4. Review matched ZIP codes, expected damage, protective steps, and checked local-help sources.
+5. Expand **Technical details** to inspect original identifiers, geographic coverage, and delivery status.
+6. Optionally register a demonstration inbox. Enter its emailed code, then review or remove that registration.
+
+The sample is not a current warning. Local-help research checks current sources, separately from the bulletin's historical date.
+
+## Run locally
+
+### Requirements
+
+- Node.js 24, with npm. Development and tests have used Node.js 24.21.0.
+- Internet access for dependency installation and the Census download.
+- OpenAI and Resend credentials only for connected bulletin processing and registration confirmation.
+
+### 1. Install and view the education pages
 
 ```bash
 npm install
 npm run dev
-npm run dev:api
-npm run build
-npm test
 ```
 
-The production output is generated in `dist/`. Configure the hosting provider to build from the `main` branch with `npm run build` and publish `dist`.
+Open [http://localhost:5173](http://localhost:5173). The homepage and weather guide work without the local API.
 
-## Resend local alerts
+### 2. Set up the full prototype
 
-The bulletin workflow records every event locally and sends matching ZIP-code alerts through Resend when the API is configured. Copy `.env.example` to `.env`, then set:
+Stop the frontend before using `dev:all`, or run the API separately with `npm run dev:api`.
 
 ```bash
-RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL="Flood Sentry <alerts@your-verified-domain.example>"
+cp .env.example .env
+npm run data:download
 ```
 
-The sender address must be a verified Resend domain or the Resend-provided testing sender. Keep `.env` private; it is ignored by Git. Start the API with `npm run dev:api` before using `/simulate`.
-
-## Weather bulletin simulator
-
-Add these server-only settings to the project-root `.env` alongside the Resend settings:
+Edit `.env` with your own credentials:
 
 ```dotenv
-OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-4.1
+RESEND_API_KEY=your_resend_api_key
+RESEND_FROM_EMAIL="FloodSentry <alerts@your-verified-domain.example>"
 ```
 
-Restart `npm run dev:api` after changing `.env`, or use `npm run dev:all` to start both services. Never prefix these secrets with `VITE_`.
+Use a sender permitted by your Resend account. Test-sender restrictions may limit who can receive messages.
 
-The `/simulate` page has one multiline weather-report input, prefilled with the June 10, 2012 Tennessee example. Submitting sends `POST /api/test-alert` with `{ "weatherReport": "..." }`:
-
-1. One local Census crosswalk download maps counties to ZIP Code Tabulation Areas (ZCTAs). The server calls OpenAI Responses with structured output only to identify the affected counties/areas and draft the resident message; it does not make ZIP lookup web searches for each bulletin.
-2. A separate model request uses the report and coverage to draft the resident email. No subscriber emails or database records are sent to OpenAI.
-3. The server records one local notification per distinct ZIP, matches subscriptions across all those ZIPs, and sends each matching email one TEST message through Resend. The page shows coverage, citations, message, subscriber count, and delivery results.
-
-County-to-ZIP lookup is approximate and can miss ZIPs or include areas outside a warning polygon; it is not a precise geospatial alerting system. Census ZCTAs approximate USPS ZIP delivery areas and can cross county lines. NWS county codes are never treated as ZIP codes. Unsupported ZIPs or failed model calls stop processing before any records or emails are created. Missing Resend settings or delivery failures leave the local event saved and show a dismissible error. Re-running a report creates a new event and may send the emails again.
-
-Run `npm run data:download` to refresh the locally stored Census crosswalk. Each bulletin normally uses two paid OpenAI requests (county extraction and drafting) with no runtime ZIP lookup search. The default model is configurable and must support Responses and structured outputs. API key, access, quota, local mapping, and drafting errors appear in the Errors page. Tests use mock providers and an in-memory SQLite database; they do not send real emails or incur API charges.
-
-The Node API must remain running for simulation and registration. Deploying only the static frontend does not deploy this local API.
-
-Implementation references: [2020 Census ZCTA-to-county relationship files](https://www.census.gov/geographies/reference-files/2020/geo/relationship-files.html) and [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
-
-## Trained model integration
-
-The supplied `Exp1_BestModel.onnx` is stored at `models/Exp1_BestModel.onnx`. Its integration is server-only and disabled by default. The adapter loads it through `onnxruntime-node` and runs inference directly in Node.js. It never exposes the model to the browser and does not start a Python process.
-
-The current adapter intentionally does not attach itself to a user-facing request yet. Your training script shows that the model expects the test dataset’s feature columns in their original order and uses `HAS_DAMAGE` as the label, but it does not include the feature names or preprocessing pipeline. Before enabling it, add the exact feature preparation for a request type, then set:
-
-```dotenv
-FLOOD_SENTRY_MODEL_ENABLED=true
-FLOOD_SENTRY_MODEL_PATH=models/Exp1_BestModel.onnx
-FLOOD_SENTRY_MODEL_REQUEST_TYPES=damage-risk
+```bash
+npm run dev:all
 ```
 
-Use the internal `deriveWithTrainedModel({ requestType, features, featureNames })` function from the future request handler. The ONNX model metadata confirms one `float32` input with exactly 14 features and outputs `output_label` plus an exported probability map. The JavaScript adapter requests the scalar `output_label` because onnxruntime-node does not currently consume that map output directly. The `features` array must contain the same numeric columns, in the same order and encoding used during training. Do not enable the integration until that mapping is implemented; an arbitrary weather-bulletin vector would produce an invalid conclusion.
+The frontend runs at `http://localhost:5173`. The API runs at `http://127.0.0.1:8787`.
+
+The Census command downloads public county-to-ZIP-area data. The API creates its own local database; no private database is distributed.
+
+Keep `.env` private. Never put provider keys in browser code or variables prefixed with `VITE_`.
+
+## How a bulletin becomes a report
+
+```text
+Pasted bulletin
+  → Extract affected counties and source details
+  → Match counties to locally stored Census ZIP-area data
+  → Draft the summary, possible damage, and protective steps
+  → Search official sources and check local-help listings
+  → Save the report in local SQLite
+  → Send one report email to the project test inbox
+```
+
+The Node API normally makes three OpenAI requests: county extraction, report drafting, and web-enabled local-help research.
+
+ZIP matching stays local. OpenAI receives bulletin and area information, not the subscriber directory or email addresses.
+
+Local-help checks use government, Red Cross, and 211 sources. Listings include source links and check times when verification succeeds.
+
+The app does not confirm opening, capacity, accessibility, or safe travel routes. Users must check those details before travel.
+
+## Technology and code
+
+| Part | Implementation |
+| --- | --- |
+| Interface | React, TypeScript, Vite, responsive CSS, and lightweight client-side routing. |
+| Local API | Node.js HTTP server with streaming progress updates. |
+| Data | SQLite for registrations, confirmation requests, reports, errors, and the Census crosswalk. |
+| Report drafting | OpenAI Responses API with structured output. |
+| Email | Resend, with HTML and plain-text reports and an embedded Wave Shield logo. |
+| Optional trained model | ONNX Runtime in Node.js; disabled in the current user-facing workflow. |
+
+Start with these files:
+
+- [`src/pages/`](src/pages/) — page interfaces and the bulletin workflow.
+- [`src/data/weatherGuide.ts`](src/data/weatherGuide.ts) — educational content and source links.
+- [`server/weather-alerts.mjs`](server/weather-alerts.mjs) — bulletin analysis, ZIP matching, saving, and delivery orchestration.
+- [`server/local-help.mjs`](server/local-help.mjs) — local-help research and source checks.
+- [`server/email-templates.mjs`](server/email-templates.mjs) — resident report email formatting.
+- [`server/subscription-verification.mjs`](server/subscription-verification.mjs) — emailed confirmation codes and registration checks.
+
+### Trained model: implemented adapter, not a claimed prediction feature
+
+The supplied ONNX classifier can run directly in Node.js. Its adapter validates a 14-number feature vector and returns a prediction label.
+
+It is disabled by default and is not connected to bulletin conclusions. The original feature names and preprocessing must be mapped first.
+
+The app does not claim validated damage-prediction accuracy. See the [developer guide](docs/DEVELOPMENT.md#trained-model-integration) for the integration boundary.
+
+## Testing and review evidence
+
+```bash
+npm test
+npm run build
+npm run email:preview
+```
+
+The suite currently contains 75 automated tests. Tests use mock providers and in-memory databases; they do not send real email or incur provider charges.
+
+Coverage includes registration validation, confirmation expiry, rate limits, targeted removal, bulletin parsing, report sections, source checks, escaping, and ONNX inference.
+
+The build produces `dist/`. The offline email preview is generated separately in `output/email-preview/`.
+
+## Privacy, safety, and prototype limits
+
+- Active registrations store email, ZIP code, consent time, registration time, and confirmation time in `data/flood-sentry.sqlite`.
+- Confirmation requests store hashed codes. Codes expire after ten minutes and have attempt and resend limits.
+- Local databases, provider keys, generated previews, and development tools are excluded from Git.
+- Registration lists and bulletin tools are unauthenticated local demonstration pages. Do not expose personal records on a public deployment.
+- ZIP-area matches are approximate county coverage, not exact warning polygons or individual building forecasts.
+- Possible damage is not presented as confirmed damage unless the supplied bulletin reports it.
+- The app does not automatically monitor live weather, send SMS, or broadcast bulletin alerts to subscribers.
+- Provider acceptance does not prove inbox delivery. Failed help research falls back to official assistance resources.
+- Registration is free to users. Connected demonstrations can still incur OpenAI and email-provider costs.
+
+Follow the National Weather Service and local emergency officials for live warnings. FloodSentry does not replace their instructions.
+
+## Sources, design, and development assistance
+
+The app links weather guidance from NOAA and the National Weather Service. Geographic matching uses the public 2020 Census ZCTA-to-county relationship file.
+
+The navy-and-sky-blue interface uses one font, short sentences, keyboard focus styles, reduced-motion support, and expandable technical details.
+
+The project was developed with AI assistance. Runtime AI use is described above. Generated cover artwork and its prompts are documented in [asset notes](docs/ASSETS.md).
+
+## Deployment and next steps
+
+Static hosting can publish the education interface using `npm run build` and the `dist/` folder. It does not deploy the Node API.
+
+Public use needs an API host, private persistent storage, administrative access controls, and stronger unsubscribe verification.
+
+Future work includes subscriber delivery, live bulletin ingestion, authenticated administration, and a validated trained-model feature mapping.
+
+For API behavior, troubleshooting, and model details, see the [developer guide](docs/DEVELOPMENT.md).

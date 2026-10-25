@@ -10,6 +10,7 @@
     "data:download": "node scripts/download-county-zip-crosswalk.mjs",
     "build": "tsc -b && vite build",
     "test": "node --test server/*.test.mjs",
+    "email:preview": "node scripts/preview-email.mjs",
     "model:check": "node --input-type=module -e \"import * as ort from 'onnxruntime-node'; const s=await ort.InferenceSession.create(process.env.FLOOD_SENTRY_MODEL_PATH || 'models/Exp1_BestModel.onnx'); console.log(s.inputNames, s.outputNames, s.inputMetadata)\"",
     "preview": "vite preview"
   },
